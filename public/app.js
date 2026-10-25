@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.5.0' };
+  var APP_INFO = { version: '0.6.0' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
@@ -56,11 +56,11 @@
   var SUBS = {
     records: ['main', 'docs'],
     med: ['overview', 'checkin', 'calendar', 'rx', 'ae'],
-    trial: ['list', 'match']
+    trial: ['match', 'search', 'saved']
   };
   /* 全部 (view, sub) 19 条——自检穷举用 */
   var VIEW_SUBS = ['dash', 'records', 'records/docs', 'ww', 'labs', 'onechart', 'gene', 'med',
-    'med/checkin', 'med/calendar', 'med/rx', 'med/ae', 'trial', 'trial/match',
+    'med/checkin', 'med/calendar', 'med/rx', 'med/ae', 'trial', 'trial/match', 'trial/search', 'trial/saved',
     'comorb', 'nutr', 'mind', 'prep', 'settings'];
 
   function parseHash() {
@@ -82,7 +82,9 @@
     sessionOpen: true,           /* AI 对话栏开合（收起只隐藏，不结束会话） */
     agentWidth: 0.35,            /* 会话列宽（25%–45%，默认 35%） */
     onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
-    trialFilter: 'all',          /* 登记摘录来源筛选 */
+    trialFilter2: { q: '', scope: 'all', status: 'all' }, /* 检索页筛选 */
+    trialPrefs: { biopsy: false, placebo: false, city: 'all' }, /* 我的偏好：不参与医学判断 */
+    trialFavs: [],                /* 收藏（跟踪列表，内存态） */
     kbTarget: null,              /* 数字键盘组件目标输入 */
     extra: { cbc: [], questions: D.questions.slice(), checked: [] } /* 本机写入（演示内存态） */
   };
@@ -787,24 +789,31 @@
 
   /* ---- 临床研究 trial / trial/match ---- */
   function trialTierName(t) { return { local: '本地库命中', external: '外部工具线索', pending: '待确认规则' }[t.tier]; }
-  /* 临床研究（现实形态，35 号三档 + GTN v0.7 参照）
-     三档：已满足 satisfied / 可能冲突 conflict / 无法判定 undetermined；待确认规则 pending 单列不计入三档。
-     规则求值是确定性求值（同档案 + 同规则版本 = 同结果），不调用模型；缺失永远流向「无法判定」；
-     排序按来源顺序，不按匹配度；禁用百分比与任何"更适合/建议参加"措辞。 */
+  /* 临床研究（对齐 biliary-tract-workbench v0.2 的展示口径）
+   * 规矩：
+   *   ① 入组条件逐条给出「符合 / 不符合 / 待确认」三态，并**并排写清**「记录里是」与「条件要求」；
+   *   ② 硬性条件不满足的单列一组，不混进可对照列表；
+   *   ③ 「我的偏好」（是否接受重新活检/安慰剂/可去城市）只影响提示与排序，**不参与医学条件判断**；
+   *   ④ 收藏 = 跟踪"试验变了什么"，不是"我该不该进"；
+   *   ⑤ 无核验日期的条目只显示「未核验」，不显示「招募中」。
+   * 三档枚举沿用 35 号：satisfied / conflict / undetermined；pending（登记原文无法结构化）单列不计入统计。
+   */
+  var TRIAL_STATUS = { recruiting: '招募中', not_yet_recruiting: '即将招募', active_not_recruiting: '在研不招募', suspended: '暂停招募', terminated: '已终止', completed: '已完成' };
+  var TRIAL_SCOPE = { first_line: '一线', rrmm: '复发/难治', frail: '老年/虚弱', registry: '登记研究', translational: '转化研究' };
+  var CRIT_CAT = { diagnosis: '诊断', subtype: '病理类型', stage: '分期', prior_tx: '既往治疗', genomic: '检测结果', organ: '器官功能', lab: '化验', age: '年龄', performance: '体能状态', other: '其他' };
   var TIER = {
-    conflict: { label: '可能冲突', mark: '⚠️', cls: 'warn' },
-    undetermined: { label: '无法判定', mark: '❓', cls: 'grey' },
-    satisfied: { label: '已满足', mark: '✅', cls: 'ok' }
+    conflict: { label: '不符合', mark: '✕', cls: 'no' },
+    undetermined: { label: '待确认', mark: '?', cls: 'q' },
+    satisfied: { label: '符合', mark: '✓', cls: 'ok' }
   };
   var TIER_ORDER = ['conflict', 'undetermined', 'satisfied'];
 
-  /* 入组档案（只读，不重复录入；缺失不阻断匹配，但对应条件判「无法判定」） */
+  /* 入组档案（只读，不重复录入；每项带来源，缺失不阻断但判「待确认」） */
   function matchProfileFields() {
     var c = cbcAll(), last = c[c.length - 1] || {};
     var btki = (D.rxChanges || []).filter(function (m) { return /泽布|BTKi|伊布/.test((m.drug || '') + (m.text || '')); });
-    var age = 2026 - 1963;
     return [
-      { k: '年龄', v: age + ' 岁', src: '病情整理 · 出生年 1963（自算，仅展示）' },
+      { k: '年龄', v: '63 岁', src: '病情整理 · 出生年 1963（自算，仅展示）' },
       { k: '诊断名（照抄）', v: 'CLL（2024-11-12 报告原文）', src: '病情整理 · 诊断档案' },
       { k: 'Binet / Rai 分期（照抄）', v: 'A（照抄）/ 0 期（照抄）', src: '病情整理 · 分期双轨' },
       { k: 'del(17p)（FISH）', v: '未检出（2024-11-15 报告原文）', src: '基因与预后档案' },
@@ -813,123 +822,233 @@
       { k: '既往 BTKi 用药', v: btki.length ? '在用泽布替尼（2026-06-01 起，医嘱原文）' : '无记录', src: '口服药与治疗 · 处方变更' },
       { k: '治疗线数', v: '1 线（BTKi 持续治疗中）', src: '口服药与治疗' },
       { k: '最近血象（WBC/ALC/Plt/Hb）', v: last.d ? 'WBC ' + last.wbc + ' / ALC ' + last.alc + ' / Plt ' + last.plt + ' / Hb ' + last.hgb + '（' + last.d + '）' : null, src: '指标检测 · 血常规' },
-      { k: 'ECOG 体能状态', v: null, src: '（无对应记录）' },
+      { k: 'ECOG 体能状态', v: null, src: '（无对应记录：门诊常写，但本工作台没有这个字段）' },
       { k: '既往 BTKi 后疾病状态（复发/难治？）', v: null, src: '（无对应记录）' }
     ];
   }
 
-  /* 三档求值：把「登记条件」与「我的记录」逐条比对（确定性规则） */
-  function evalTrial(t) {
-    var P = {}; matchProfileFields().forEach(function (f) { P[f.k] = f; });
-    var rules = [], pending = [];
-    (t.rules || []).forEach(function (r) {
-      var mine = null, src = '（无对应记录）';
-      var f = P[r.field];
-      if (f && f.v) { mine = f.v; src = f.src; }
-      if (r.tier === 'pending') { pending.push(r.text); return; }
-      var tier;
-      if (r.missing_key || !f || !f.v) tier = 'undetermined';
-      else if (r.op === 'ge') tier = parseInt(mine, 10) >= r.value ? 'satisfied' : 'conflict';
-      else if (r.op === 'eq') tier = mine === r.value ? 'satisfied' : 'conflict';
-      else if (r.op === 'absent') tier = (r.check && r.check(mine)) ? 'conflict' : 'satisfied';
-      else tier = 'undetermined';
-      rules.push({ text: r.text, tier: tier, mine: mine || '未记录', src: src });
-    });
-    var by = { conflict: [], undetermined: [], satisfied: [] };
-    rules.forEach(function (r) { by[r.tier].push(r); });
-    return { recordId: t.id, title: t.title, source: t.source, phase: t.phase, by: by, pending: pending, rules: rules };
+  function trialOf(i) {
+    var t = D.trials[i] || {};
+    var x = (D.trialExtras || [])[i] || {};
+    return Object.assign({}, t, x);
   }
-  function trialRows(e) {
-    return TIER_ORDER.map(function (tier) {
-      var list = e.by[tier];
-      if (!list.length) return '';
-      return '<div class="tier-group"><h4 class="tier-head ' + TIER[tier].cls + '">' + TIER[tier].mark + ' ' + TIER[tier].label +
-        '（' + list.length + '）</h4><ul class="tier-list">' + list.map(function (r) {
-          return '<li><b>' + esc(r.text) + '</b><span class="tier-mine">你的记录：' + esc(r.mine) + ' · 来源：' + esc(r.src) + '</span></li>';
-        }).join('') + '</ul></div>';
-    }).join('');
-  }
-  function trialCard(e) {
-    var sum = '已满足 ' + e.by.satisfied.length + ' 项 · 可能冲突 ' + e.by.conflict.length + ' 项 · 无法判定 ' + e.by.undetermined.length + ' 项' +
-      (e.pending.length ? ' · 待确认规则 ' + e.pending.length + ' 项' : '');
-    var chips = '<span class="tier-chips">' +
-      (e.by.conflict.length ? '<span class="tchip warn">⚠️ ' + e.by.conflict.length + '</span>' : '') +
-      (e.by.undetermined.length ? '<span class="tchip grey">❓ ' + e.by.undetermined.length + '</span>' : '') +
-      (e.by.satisfied.length ? '<span class="tchip ok">✅ ' + e.by.satisfied.length + '</span>' : '') +
-      (e.pending.length ? '<span class="tchip pending">⏳ ' + e.pending.length + '</span>' : '') + '</span>';
-    return '<details class="trial-fold"><summary><b>' + esc(e.recordId) + '</b> ' + esc(e.title) +
-      ' <span class="muted">' + esc(e.phase) + ' · ' + esc(e.source) + '</span>' + chips + '</summary>' +
-      '<p class="muted small">' + esc(sum) + '（汇总只计数，不给匹配度）</p>' +
-      trialRows(e) +
-      (e.pending.length ? '<div class="tier-group"><h4 class="tier-head grey">⏳ 待确认规则（不进三档统计）</h4><ul class="tier-list">' +
-        e.pending.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></div>' : '') +
-      '<p class="muted small">三档只说明记录与登记条件的比对结果；入组判断属于医生与研究中心。登记状态，未核实。</p>' +
-      '<p class="muted small">登记号 ' + esc(e.recordId) + ' · 排序按来源顺序，不按匹配度 · 评估口径 ' + esc(D.matchMeta.ruleSet) + ' · 档案 ' + esc(D.matchMeta.profileRev) + '</p>' +
-      '</details>';
+  function allTrials() { return (D.trials || []).map(function (_, i) { return trialOf(i); }); }
+
+  /* 单条条件求值：给出三态 + 「记录里是」+「条件要求」原文 */
+  function evalCriterion(c, P) {
+    var need = c.text;
+    if (!c.field || c.op === 'manual') {
+      return { state: 'undetermined', mine: '条目无法结构化，需人工核对', need: need, hard: !!c.hard, cat: c.category, kind: c.kind, text: c.text };
+    }
+    var f = P[c.field];
+    var mine = f && f.v ? f.v : null;
+    var src = f ? f.src : '（无对应字段）';
+    if (!mine) return { state: 'undetermined', mine: '未记录（' + src + '）', need: need, hard: !!c.hard, cat: c.category, kind: c.kind, text: c.text, field: c.field };
+    var state;
+    if (c.op === 'ge') state = parseInt(mine, 10) >= Number(c.value) ? 'satisfied' : 'conflict';
+    else if (c.op === 'lte') state = parseInt(mine, 10) <= Number(c.value) ? 'satisfied' : 'conflict';
+    else if (c.op === 'eq') state = mine === c.value ? 'satisfied' : 'conflict';
+    else if (c.op === 'absent') state = /在用|用过/.test(mine) ? 'conflict' : 'satisfied';
+    else if (c.op === 'present') state = /在用|用过|1 线/.test(mine) ? 'satisfied' : 'conflict';
+    else if (c.op === 'naive') state = /^1 线/.test(mine) ? 'conflict' : 'satisfied';
+    else state = 'undetermined';
+    return { state: state, mine: mine + '（' + src + '）', need: need, hard: !!c.hard, cat: c.category, kind: c.kind, text: c.text };
   }
 
-  function pageTrial() {
-    var sub = state.route.sub || 'list';
-    var head = pageHead('临床研究', '登记摘录与三档比对',
-      '这里是登记摘录，不是招募推荐：三档只说明「你的记录」与「登记条件」的比对结果；不给匹配度、不排序、不替你挑选。', backHome());
-    var nav = subnav('trial', [['登记摘录', 'list'], ['三档比对', 'match']]);
+  function matchTrial(t, P) {
+    var evals = (t.criteria || []).map(function (c) { return evalCriterion(c, P); });
+    var count = function (s) { return evals.filter(function (e) { return e.state === s; }).length; };
+    var met = count('satisfied'), unmet = count('conflict'), unknown = count('undetermined');
+    var hardUnmet = evals.filter(function (e) { return e.state === 'conflict' && e.hard; });
+    /* 粗筛符合度：未知项按 0 计，只会偏低不会偏高（口径写在卡脚） */
+    var pct = Math.round((met / Math.max(1, met + unmet + unknown)) * 100);
+    var band = hardUnmet.length ? 'ineligible' : (pct >= 80 && unknown <= 1) ? 'high' : pct >= 55 ? 'partial' : 'needs_info';
+    return { t: t, evals: evals, met: met, unmet: unmet, unknown: unknown, pct: pct, band: band, hardUnmet: hardUnmet };
+  }
+  var BAND = {
+    high: ['高度符合', 'ok'], partial: ['部分符合', 'warn'],
+    needs_info: ['需补充信息', 'grey'], ineligible: ['硬性条件不满足', 'no']
+  };
+  function trialMatches() {
+    var P = {}; matchProfileFields().forEach(function (f) { P[f.k] = f; });
+    return allTrials().map(function (t) { return matchTrial(t, P); });
+  }
+
+  function critLine(e) {
+    return '<div class="crit ' + e.state + '"><div class="crit-line">' +
+      '<span class="crit-mark ' + TIER[e.state].cls + '" aria-hidden="true">' + TIER[e.state].mark + '</span>' +
+      '<b>' + (e.kind === 'exclude' ? '排除' : '入组') + ' · ' + esc(CRIT_CAT[e.cat] || e.cat) + '</b>' +
+      (e.hard ? '<span class="muted hard-tag">硬性</span>' : '<span class="muted">非硬性</span>') + '</div>' +
+      '<p>' + esc(e.text) + '</p>' +
+      '<small><b>' + TIER[e.state].label + '</b> · 记录里是：' + esc(e.mine) + ' · 条件要求：' + esc(e.need) + '</small></div>';
+  }
+  function trialCard(m) {
+    var t = m.t, band = BAND[m.band];
+    var verified = t.verifiedOn ? '核验 ' + t.verifiedOn : '未核验';
+    var statusLabel = t.verifiedOn ? (TRIAL_STATUS[t.status] || t.status) : '未核验（不显示招募状态）';
+    var order = { conflict: 0, undetermined: 1, satisfied: 2 };
+    var sorted = m.evals.slice().sort(function (a, b) { return order[a.state] - order[b.state]; });
+    var top = sorted.slice(0, 4), rest = sorted.slice(4);
+    return '<section class="trial-card' + (m.band === 'ineligible' ? ' ineligible' : '') + '">' +
+      '<div class="trial-top"><div><div class="trial-tags">' +
+      badge(statusLabel, t.status === 'recruiting' && t.verifiedOn ? 'ok' : t.status === 'suspended' ? 'warn' : 'grey') +
+      badge((t.phase || '—'), 'grey') + badge(TRIAL_SCOPE[t.scope] || '—', 'grey') +
+      (t.verifiedOn ? badge(verified, '') : '') + '</div>' +
+      '<h2>' + esc(t.title) + '</h2>' +
+      '<p class="trial-reg">' + esc(t.id) + ' · ' + esc(t.source) + ' · ' + esc(((t.sites || []).map(function (x) { return x.city; }).join(' / ')) || '中心待定') + '</p></div>' +
+      '<div class="fit ' + band[1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + band[0] + '</em></div></div>' +
+      '<div class="match-counts">' + badge('符合 ' + m.met, 'ok') +
+        (m.unmet ? badge('不符合 ' + m.unmet, 'no') : '') +
+        (m.unknown ? badge('待确认 ' + m.unknown, 'grey') : '') +
+        (m.hardUnmet.length ? badge('硬性不满足 ' + m.hardUnmet.length, 'no') : '') + '</div>' +
+      '<div class="crit-list">' + top.map(critLine).join('') + '</div>' +
+      (rest.length ? '<details class="crit-more"><summary>其余 ' + rest.length + ' 条条件</summary><div class="crit-list">' + rest.map(critLine).join('') + '</div></details>' : '') +
+      '<div class="trial-actions">' +
+        '<button type="button" class="btn ' + (state.trialFavs.indexOf(t.id) >= 0 ? 'btn-quiet' : 'btn-primary') + '" data-act="trial-fav" data-id="' + esc(t.id) + '">' +
+          (state.trialFavs.indexOf(t.id) >= 0 ? '已收藏（跟踪中）' : '收藏并跟踪') + '</button>' +
+        '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
+        '<button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看条件原文与中心</button>' +
+      '</div>' +
+      '<p class="small-note">符合度 = 符合项 ÷ 已对照项；未知项按 0 计，因此只会偏低、不会偏高。这不是入组资格，也不代表效果。登记状态，未核实。</p>' +
+      '</section>';
+  }
+
+  /* ---- 二级页 1：匹配（含入组档案、我的偏好、可对照/硬性不满足分组） ---- */
+  function trialMatchBody() {
     var fields = matchProfileFields();
     var missing = fields.filter(function (f) { return !f.v; });
-    var sourceNote = '<p class="muted small">来源：中国药物临床试验登记平台（chinadrugtrials）+ ICTRP · 快照 ' + esc(D.trialSnapshot) +
-      ' · 登记 ≠ 有效 ≠ 可入组；状态一律「登记状态，未核实」。</p>';
-    var body;
-
-    if (sub === 'match') {
-      var evals = D.trials.map(evalTrial);
-      body = '<section class="card"><div class="card-head"><h2 class="h2">入组档案（只读，不重复录入）</h2>' +
+    var all = trialMatches();
+    var fit = all.filter(function (m) { return m.band !== 'ineligible'; });
+    var bad = all.filter(function (m) { return m.band === 'ineligible'; });
+    var pref = state.trialPrefs || {};
+    return '<div class="notice"><b>这里的试验条目是演示数据</b>（T-01…T-10），不是真实在招试验。' +
+      '真实版本须接登记平台，逐条显示登记号、状态与核验日期；没有核验日期的只显示「未核验」，不显示「招募中」。</div>' +
+      '<section class="card"><div class="card-head"><h2 class="h2">用来对照的入组档案</h2>' +
         '<span class="muted small">完整度 ' + (fields.length - missing.length) + '/' + fields.length + '</span></div>' +
-        '<div class="notice">缺失不阻断比对，但对应条件会判「无法判定」' +
-          (missing.length ? '；当前缺失：' + missing.map(function (f) { return esc(f.k); }).join(' · ') : '') + '。</div>' +
-        '<div class="table-wrap"><table class="match-tbl"><thead><tr><th>字段</th><th>我的记录</th><th>来源</th></tr></thead><tbody>' +
-        fields.map(function (f) {
-          return '<tr><td>' + esc(f.k) + '</td><td>' + (f.v ? esc(f.v) : '<span class="miss-tag">未记录 → 无法判定</span>') + '</td><td class="muted">' + esc(f.src) + '</td></tr>';
-        }).join('') + '</tbody></table></div>' +
-        '<p class="muted small">年龄 / 分期 / 基因 / 用药等都在各自业务页维护，这里只读；补充请回对应页面录入。</p></section>' +
-        '<section class="card"><div class="card-head"><h2 class="h2">检索双通道</h2>' + badge('AI 只起草不代发') + '</div>' +
-        '<div class="table-wrap"><table><tbody>' +
-        '<tr><td>① 自带库</td><td>' + esc(D.trialSourceLabel) + ' · 快照 ' + esc(D.trialSnapshot) + ' · 库内 ' + esc(D.trialLibraryCount) + ' 条；本页演示 ' + D.trials.length + ' 条</td></tr>' +
-        '<tr><td>② AI 协助比对</td><td>把入组档案摘要与登记条目预写进提示词（cll:agent-draft：只填输入框，不自动发送）' +
-          aiBtn(matchPrompt(), 'AI 协助比对') + '</td></tr>' +
-        '<tr><td>外部通道</td><td>脚本 fetch-cll-trials-2026（需在终端手动运行，本页不代跑）· 在线通道终态如实透传：FAILED/无覆盖 ≠ 查过</td></tr>' +
-        '</tbody></table></div></section>' +
-        '<section class="card"><div class="card-head"><h2 class="h2">三档比对结果（' + evals.length + ' 条）</h2>' + badge('无匹配度 · 不排序') + '</div>' +
-        '<div class="notice">每张卡按「已满足 / 可能冲突 / 无法判定」计数并逐条给出「你的记录」与来源；待确认规则单列、不进三档统计。' +
-          D.matchMeta.footerNote + '</div>' +
-        evals.map(trialCard).join('') +
-        '<div class="row"><button type="button" class="btn" data-act="export-trial">导出比对结果（private 打码）</button>' +
-        '<pre class="agent-log" id="trialExport" hidden></pre></div></section>';
-    } else {
-      body = '<section class="card"><div class="card-head"><h2 class="h2">登记摘录（快照 ' + esc(D.trialSnapshot) + '）</h2>' +
-        badge('状态：登记状态，未核实') + '</div>' +
-        '<div class="chips chips-wrap" role="group" aria-label="按来源筛选">' +
-        [['all', '全部来源（' + D.trials.length + '）'], ['chinadrugtrials', '药物临床试验登记平台'], ['ictrp', 'ICTRP']].map(function (f) {
-          return '<button type="button" class="chip" data-act="trial-filter" data-src="' + f[0] + '" aria-pressed="' + (state.trialFilter === f[0]) + '">' + f[1] + '</button>';
-        }).join('') + '</div>' +
-        (function () {
-          var list = state.trialFilter === 'all' ? D.trials : D.trials.filter(function (t) { return t.source === state.trialFilter; });
-          if (!list.length) return '<div class="chart-empty"><p>这个来源在当前快照里没有条目（如实显示空态，不代表全库无试验）。</p></div>';
-          return list.map(function (t) {
-            return '<article class="trial-item"><h3 class="h3">' + esc(t.id) + ' · ' + esc(t.title) + '</h3>' +
-              '<p class="muted small">' + esc(t.phase) + ' · ' + esc(t.source) + ' · 登记状态，未核实</p>' +
-              '<p class="muted small">登记 ≠ 有效 ≠ 可入组；参与条件以登记平台原文与研究方答复为准。</p></article>';
-          }).join('');
-        })() + sourceNote + '</section>';
+      '<div class="fact-grid">' + fields.map(function (f) {
+        return '<dl><dt>' + esc(f.k) + '</dt><dd><b' + (f.v ? '' : ' class="miss-b"') + '>' + esc(f.v || '未记录') + '</b><span>' + esc(f.src) + '</span></dd></dl>';
+      }).join('') + '</div>' +
+      '<p class="small-note">这份清单只描述你的记录里有什么；缺失项对应的条件一律判「待确认」，不会被当作符合。</p></section>' +
+      '<section class="card"><div class="card-head"><h2 class="h2">我的偏好（不影响医学条件）</h2>' +
+        '<span class="muted small">只改变提示与排序，不改变「符合/不符合」</span></div>' +
+      '<div class="pref-row">' +
+        '<label class="check"><input type="checkbox" data-act="trial-pref" data-key="biopsy"' + (pref.biopsy ? ' checked' : '') + '> 接受为入组重新活检</label>' +
+        '<label class="check"><input type="checkbox" data-act="trial-pref" data-key="placebo"' + (pref.placebo ? ' checked' : '') + '> 接受安慰剂对照</label>' +
+        '<label class="inline-field">可去的城市 <select data-act="trial-pref" data-key="city">' +
+          ['all', '上海', '北京', '广州', '杭州', '成都'].map(function (c) {
+            return '<option value="' + c + '"' + ((pref.city || 'all') === c ? ' selected' : '') + '>' + (c === 'all' ? '不限' : c) + '</option>';
+          }).join('') + '</select></label></div></section>' +
+      '<section class="card"><div class="card-head"><h2 class="h2">检索与 AI</h2>' + badge('AI 只起草') + '</div>' +
+      '<div class="row">' + aiBtn(matchPrompt(), 'AI 协助整理命中证据') +
+      '<button type="button" class="btn" data-act="export-trial">导出这次对照</button></div>' +
+      '<p class="muted small">来源：' + esc(D.trialSourceLabel) + ' · 快照 ' + esc(D.trialSnapshot) + ' · 库内 ' + esc(D.trialLibraryCount) + ' 条，本页演示 ' + D.trials.length + ' 条。' +
+      '外部通道脚本 fetch-cll-trials-2026 需在终端手动运行；在线终态如实透传（FAILED/无覆盖 ≠ 查过）。</p>' +
+      '<pre class="agent-log" id="trialExport" hidden></pre></section>' +
+      '<div class="section-title"><div><h2>按当前记录能对上的（' + fit.length + '）</h2>' +
+      '<p>待确认项越少排得越前；硬性条件不满足的单列在下面，不会混进来</p></div></div>' +
+      (fit.length ? fit.map(trialCard).join('') : '<div class="chart-empty"><p>当前条件下没有可对照的条目。</p></div>') +
+      (bad.length ? '<details class="bad-trials"><summary>硬性条件不满足的 ' + bad.length + ' 条（点开看是哪一条挡住了）</summary>' + bad.map(trialCard).join('') + '</details>' : '');
+  }
+
+  /* ---- 二级页 2：检索（只看条目本身，不看"与我相关"） ---- */
+  function trialSearchBody() {
+    var f = state.trialFilter2 || { q: '', scope: 'all', status: 'all' };
+    var all = trialMatches();
+    var list = all.filter(function (m) {
+      var t = m.t;
+      if (f.q && (t.id + ' ' + t.title).toLowerCase().indexOf(f.q.toLowerCase()) < 0) return false;
+      if (f.scope !== 'all' && t.scope !== f.scope) return false;
+      if (f.status !== 'all' && t.status !== f.status) return false;
+      return true;
+    });
+    return '<div class="notice">检索是「按条件找」，不是「替你挑」：排序用同一套逐条对照，不改写条件，也不隐藏不符合的条目。</div>' +
+      '<section class="card"><div class="card-head"><h2 class="h2">筛条件</h2><span class="muted small">只看条目本身；「与我相关」的判断在匹配页</span></div>' +
+      '<div class="pref-row">' +
+        '<label class="inline-field" style="flex:1 1 220px">关键词 <input id="trial-q" data-act="trial-q" value="' + esc(f.q) + '" placeholder="登记号 / 药名 / 靶点"></label>' +
+        '<label class="inline-field">治疗场景 <select data-act="trial-filter2" data-key="scope">' +
+          [['all', '不限'], ['first_line', '一线'], ['rrmm', '复发/难治'], ['frail', '老年/虚弱'], ['registry', '登记研究'], ['translational', '转化研究']].map(function (o) {
+            return '<option value="' + o[0] + '"' + (f.scope === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+          }).join('') + '</select></label>' +
+        '<label class="inline-field">状态 <select data-act="trial-filter2" data-key="status">' +
+          [['all', '不限'], ['recruiting', '招募中'], ['not_yet_recruiting', '即将招募'], ['suspended', '暂停招募'], ['active_not_recruiting', '在研不招募']].map(function (o) {
+            return '<option value="' + o[0] + '"' + (f.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+          }).join('') + '</select></label>' +
+        '<button type="button" class="btn btn-quiet" data-act="trial-reset">清空</button></div>' +
+      '<p class="small-note">两者分开，是为了让你能看见"与我无关但存在"的选项。</p></section>' +
+      '<div class="section-title"><div><h2>' + list.length + ' 条结果</h2><p>按粗筛符合度排序；状态与核验日期逐条显示</p></div></div>' +
+      (list.length ? list.map(trialCard).join('') : '<div class="chart-empty"><p>没有符合条件的条目。放宽一个筛选项再试。</p></div>');
+  }
+
+  /* ---- 二级页 3：收藏与跟踪（跟踪"试验变了什么"，不是"我该不该进"） ---- */
+  function trialSavedBody() {
+    var favs = state.trialFavs || [];
+    if (!favs.length) {
+      return '<div class="notice">跟踪的是「试验变了什么」，不是「我该不该进」。每次状态、中心、截止日期、入组条件变化都单独记一条，带来源与日期；不合并成"最新情况"，也不预测结果。</div>' +
+        '<div class="chart-empty"><p>还没有收藏的试验。在「匹配」里点「收藏并跟踪」，这里才会出现跟踪线。</p></div>';
     }
-    return head + nav + body;
+    return '<div class="notice">跟踪的是「试验变了什么」…（同上口径）</div>' +
+      favs.map(function (id) {
+        var m = trialMatches().filter(function (x) { return x.t.id === id; })[0];
+        if (!m) return '';
+        var t = m.t;
+        var unknown = m.evals.filter(function (e) { return e.state === 'undetermined'; }).slice(0, 3);
+        return '<section class="card saved-card"><div class="card-head"><div>' +
+          '<div class="trial-tags">' + badge(TRIAL_STATUS[t.status] || t.status, t.status === 'recruiting' ? 'ok' : t.status === 'suspended' ? 'warn' : 'grey') +
+          badge('核验 ' + (t.verifiedOn || '未核验'), t.verifiedOn ? '' : 'warn') + '</div>' +
+          '<h2 class="h2">' + esc(t.id) + ' · ' + esc(t.title) + '</h2>' +
+          '<p class="muted small">' + esc(TRIAL_SCOPE[t.scope] || '') + ' · ' + esc((t.sites || []).map(function (x) { return x.city; }).join(' / ') || '中心待定') + '</p></div>' +
+          '<div class="fit ' + BAND[m.band][1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + BAND[m.band][0] + '</em></div></div>' +
+          (t.status === 'suspended' ? '<div class="notice">这条已暂停招募。你收藏之后状态变了，记录仍在；要不要继续等，去门诊问研究护士。</div>' : '') +
+          '<div class="crit-mini">' + (unknown.length ? unknown.map(function (e) { return '<span>? ' + esc(e.text) + '</span>'; }).join('') : '<span>没有待确认项</span>') + '</div>' +
+          '<div class="trial-actions">' +
+            '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
+            '<button type="button" class="btn btn-quiet" data-act="trial-fav" data-id="' + esc(t.id) + '">取消收藏</button>' +
+          '</div></section>';
+      }).join('');
+  }
+
+  function trialDetail(id) {
+    var t = allTrials().filter(function (x) { return x.id === id; })[0];
+    if (!t) return;
+    var body = '<p class="muted small">条目为演示数据，不是真实在招试验；真实版本须给登记平台链接与核验日期。</p>' +
+      '<h3 class="h3">入组 / 排除条件（登记原文要点）</h3>' +
+      (t.criteria || []).map(function (c) {
+        return '<div class="crit"><div class="crit-line"><b>' + (c.kind === 'exclude' ? '排除' : '入组') + ' · ' + esc(CRIT_CAT[c.category] || c.category) + '</b>' +
+          (c.hard ? '<span class="muted">硬性</span>' : '<span class="muted">非硬性</span>') + '</div><p>' + esc(c.text) + '</p></div>';
+      }).join('') +
+      '<h3 class="h3">中心</h3>' +
+      ((t.sites || []).map(function (s2) {
+        return '<p>' + esc(s2.city) + ' · ' + esc(s2.hospital) + ' — ' + esc(s2.contact) + ' · ' +
+          (s2.status === 'open' ? '开放' : s2.status === 'planned' ? '计划启动' : '暂停') + ' · ' + esc(s2.updatedOn || '') + '</p>';
+      }).join('') || '<p>中心未登记</p>') +
+      '<p class="small-note">要不要联系、能不能入组，由研究团队当面评估。工作台只把条件与记录摆在一起。</p>';
+    var dlg = $('#trial-dialog');
+    if (dlg) {
+      $('#trial-dialog-title').textContent = t.id + ' · ' + t.title;
+      $('#trial-dialog-body').innerHTML = body;
+      if (!dlg.open) dlg.showModal();
+    }
   }
 
   function matchPrompt() {
     var fields = matchProfileFields();
     var summary = fields.map(function (f) { return f.k + '：' + (f.v || '未记录'); }).join('；');
-    var ids = D.trials.map(function (t) { return t.id + '（' + t.title + '）'; }).join(' / ');
+    var ids = allTrials().map(function (t) { return t.id + '（' + t.title + '）'; }).join(' / ');
     return '请协助我逐条比对入组档案与这些登记条目。档案摘要——' + summary + '。登记条目——' + ids +
-      '。要求：只用「已满足 / 可能冲突 / 无法判定」三档逐条列出，每条写清「我的记录」与来源；' +
-      '缺失字段一律判「无法判定」；不输出匹配度百分比、不排序、不写哪条更适合我；入组判断属于医生与研究中心。';
+      '。要求：只用「符合 / 不符合 / 待确认」三档逐条列出，每条写清「记录里是」与「条件要求」；' +
+      '缺失字段一律判「待确认」；不输出匹配度百分比、不排序、不写哪条更适合我；入组判断属于医生与研究中心。';
+  }
+
+  function pageTrial() {
+    var sub = state.route.sub || 'match';
+    var head = pageHead('临床研究', '按记录逐条对照登记条件',
+      '这里是登记摘录与逐条对照，不是招募推荐：每条条件都写清「记录里是」与「条件要求」；不给排名、不替你做决定。', backHome());
+    var nav = subnav('trial', [['匹配', 'match'], ['检索', 'search'], ['收藏与跟踪', 'saved']]);
+    var body = sub === 'search' ? trialSearchBody() : sub === 'saved' ? trialSavedBody() : trialMatchBody();
+    var dlg = '<dialog id="trial-dialog" class="modal"><div class="modal-head"><h2 class="h2" id="trial-dialog-title"></h2>' +
+      '<button type="button" class="btn" data-act="close-trial-dialog">关闭</button></div>' +
+      '<div class="modal-body" id="trial-dialog-body"></div></dialog>';
+    return head + nav + body + dlg;
   }
 
   /* ---- 共病与在用药 comorb ---- */
@@ -1080,6 +1199,27 @@
         redrawChart(); break;
       }
       case 'pin-clear': state.chart.pin = null; redrawChart(); break;
+      case 'trial-fav': {
+        var fid = el.getAttribute('data-id');
+        var ix = state.trialFavs.indexOf(fid);
+        if (ix >= 0) { state.trialFavs.splice(ix, 1); toast('已取消收藏'); }
+        else { state.trialFavs.push(fid); toast('已收藏到跟踪（原型为内存态，刷新即还原）'); }
+        render();
+        break;
+      }
+      case 'trial-ask': {
+        var tid = el.getAttribute('data-id');
+        var m0 = trialMatches().filter(function (x) { return x.t.id === tid; })[0];
+        var pend = m0 ? m0.evals.filter(function (e) { return e.state === 'undetermined'; }) : [];
+        pend.forEach(function (e) {
+          state.extra.questions.push({ q: '【' + tid + '】' + e.text + '：我这种情况是否满足？（记录里是：' + e.mine + '）', d: '2026-10-25', from: '试验待确认项' });
+        });
+        toast(pend.length ? '已把 ' + pend.length + ' 条待确认项加进问题清单' : '这条没有待确认项');
+        break;
+      }
+      case 'trial-detail': trialDetail(el.getAttribute('data-id')); break;
+      case 'close-trial-dialog': { var d = $('#trial-dialog'); if (d && d.open) d.close(); break; }
+      case 'trial-reset': state.trialFilter2 = { q: '', scope: 'all', status: 'all' }; render(); break;
       case 'trial-filter': {
         state.trialFilter = el.getAttribute('data-src');
         render();

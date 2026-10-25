@@ -320,3 +320,81 @@ window.LYMPAL_DEMO.matchMeta = {
 };
 window.LYMPAL_DEMO.trialSourceLabel = '中国药物临床试验登记平台（chinadrugtrials）+ ICTRP';
 window.LYMPAL_DEMO.trialLibraryCount = 461;
+
+/* 临床试验扩展字段（对齐 biliary-tract-workbench v0.2 的展示口径）
+   criteria: kind=include|exclude, category, text=登记原文要点, field/op/value 供确定性求值, hard=硬性条件
+   sites: 中心（city/hospital/contact/status/updatedOn）；verifiedOn=核验日期，缺省显示「未核验」 */
+window.LYMPAL_DEMO.trialExtras = [
+  { status: 'recruiting', scope: 'first_line', verifiedOn: '2026-10-20',
+    sites: [{ city: '上海', hospital: '演示医院血液科', contact: '研究护士（演示）', status: 'open', updatedOn: '2026-10-18' },
+            { city: '杭州', hospital: '演示医院肿瘤内科', contact: '研究医生（演示）', status: 'planned', updatedOn: '2026-10-18' }],
+    criteria: [
+      { kind: 'include', category: 'diagnosis', text: '经病理/免疫表型确诊 CLL 或 SLL', field: '诊断名（照抄）', op: 'eq', value: 'CLL（2024-11-12 报告原文）', hard: true },
+      { kind: 'include', category: 'age', text: '入组时年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true },
+      { kind: 'exclude', category: 'prior_tx', text: '既往接受过 BTKi 治疗者排除', field: '既往 BTKi 用药', op: 'absent', hard: true },
+      { kind: 'include', category: 'performance', text: 'ECOG 体力状态 0–2', field: 'ECOG 体能状态', op: 'lte', value: 2, hard: true },
+      { kind: 'include', category: 'other', text: '试验期间需采取有效避孕措施（登记原文未结构化）', op: 'manual', hard: false }
+    ] },
+  { status: 'recruiting', scope: 'rrmm', verifiedOn: '2026-10-21',
+    sites: [{ city: '北京', hospital: '演示医院血液科', contact: '研究医生（演示）', status: 'open', updatedOn: '2026-10-20' }],
+    criteria: [
+      { kind: 'include', category: 'genomic', text: 'del(17p) 阳性（FISH 检出）', field: 'del(17p)（FISH）', op: 'eq', value: '检出', hard: true },
+      { kind: 'include', category: 'prior_tx', text: '既往 BTKi 治疗后进展或不耐受', field: '既往 BTKi 后疾病状态（复发/难治？）', op: 'manual', hard: true },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] },
+  { status: 'recruiting', scope: 'rrmm', verifiedOn: null,
+    sites: [{ city: '广州', hospital: '演示医院血液科', contact: '研究护士（演示）', status: 'open', updatedOn: '2026-10-19' }],
+    criteria: [
+      { kind: 'include', category: 'prior_tx', text: '既往接受过共价 BTKi 治疗', field: '既往 BTKi 用药', op: 'present', hard: true },
+      { kind: 'include', category: 'prior_tx', text: '共价 BTKi 后疾病进展', field: '既往 BTKi 后疾病状态（复发/难治？）', op: 'manual', hard: true },
+      { kind: 'include', category: 'performance', text: 'ECOG 0–2', field: 'ECOG 体能状态', op: 'lte', value: 2, hard: true }
+    ] },
+  { status: 'not_yet_recruiting', scope: 'first_line', verifiedOn: '2026-10-22',
+    sites: [{ city: '成都', hospital: '演示医院血液科', contact: '研究医生（演示）', status: 'planned', updatedOn: '2026-10-22' }],
+    criteria: [
+      { kind: 'include', category: 'prior_tx', text: '既往未经系统治疗（treatment-naive）', field: '治疗线数', op: 'naive', hard: true },
+      { kind: 'include', category: 'genomic', text: '需提供 TP53 状态用于分层', field: 'TP53 突变', op: 'manual', hard: false },
+      { kind: 'include', category: 'genomic', text: '需提供 IGHV 状态用于分层', field: 'IGHV 突变状态', op: 'manual', hard: false }
+    ] },
+  { status: 'recruiting', scope: 'registry', verifiedOn: '2026-10-15',
+    sites: [{ city: '不限', hospital: '多中心登记', contact: '研究协调员（演示）', status: 'open', updatedOn: '2026-10-15' }],
+    criteria: [
+      { kind: 'include', category: 'diagnosis', text: '确诊 CLL/SLL（含观察等待期）', field: '诊断名（照抄）', op: 'eq', value: 'CLL（2024-11-12 报告原文）', hard: true },
+      { kind: 'include', category: 'other', text: '能按约定完成年度随访', op: 'manual', hard: false },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] },
+  { status: 'recruiting', scope: 'rrmm', verifiedOn: null,
+    sites: [{ city: '上海', hospital: '演示医院血液科', contact: '研究护士（演示）', status: 'open', updatedOn: '2026-10-16' }],
+    criteria: [
+      { kind: 'include', category: 'prior_tx', text: '复发/难治 CLL（登记原文）', field: '既往 BTKi 后疾病状态（复发/难治？）', op: 'manual', hard: true },
+      { kind: 'include', category: 'prior_tx', text: '既往 BTKi 暴露', field: '既往 BTKi 用药', op: 'present', hard: true },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] },
+  { status: 'recruiting', scope: 'frail', verifiedOn: '2026-10-18',
+    sites: [{ city: '杭州', hospital: '演示医院老年血液科', contact: '研究医生（演示）', status: 'open', updatedOn: '2026-10-18' }],
+    criteria: [
+      { kind: 'include', category: 'age', text: '年龄 ≥ 65 岁，或不符合强化疗条件', field: '年龄', op: 'ge', value: 65, hard: true },
+      { kind: 'include', category: 'performance', text: 'ECOG 0–2', field: 'ECOG 体能状态', op: 'lte', value: 2, hard: true },
+      { kind: 'include', category: 'organ', text: '肝肾功能在参考范围内（登记原文要点）', op: 'manual', hard: true }
+    ] },
+  { status: 'suspended', scope: 'rrmm', verifiedOn: '2026-10-23',
+    sites: [{ city: '北京', hospital: '演示医院血液科', contact: '研究护士（演示）', status: 'paused', updatedOn: '2026-10-23' }],
+    criteria: [
+      { kind: 'include', category: 'other', text: '已达尿 MRD 阴性（uMRD）后停药观察', op: 'manual', hard: true },
+      { kind: 'include', category: 'genomic', text: 'TP53 状态需已知', field: 'TP53 突变', op: 'manual', hard: false },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] },
+  { status: 'active_not_recruiting', scope: 'registry', verifiedOn: '2026-10-12',
+    sites: [{ city: '不限', hospital: '真实世界登记', contact: '研究协调员（演示）', status: 'open', updatedOn: '2026-10-12' }],
+    criteria: [
+      { kind: 'include', category: 'prior_tx', text: '正在接受或曾接受 BTKi 治疗', field: '既往 BTKi 用药', op: 'present', hard: true },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] },
+  { status: 'recruiting', scope: 'translational', verifiedOn: null,
+    sites: [{ city: '广州', hospital: '演示医院血液实验室', contact: '研究协调员（演示）', status: 'open', updatedOn: '2026-10-11' }],
+    criteria: [
+      { kind: 'include', category: 'other', text: '同意采集外周血样本', op: 'manual', hard: false },
+      { kind: 'include', category: 'genomic', text: 'del(11q) 或 +12 状态记录完整', field: 'IGHV 突变状态', op: 'manual', hard: false },
+      { kind: 'include', category: 'age', text: '年龄 ≥ 18 岁', field: '年龄', op: 'ge', value: 18, hard: true }
+    ] }
+];
