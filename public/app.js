@@ -3,8 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.2.0' };
-  var APP_INFO = { version: '0.1.0' };
+  var APP_INFO = { version: '0.3.0' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
@@ -80,6 +79,9 @@
     flipped: new Set(),          /* 指标卡翻面，存 key（27 号：状态存 key 不存 DOM） */
     chart: { sel: ['alc', 'hgb'], range: 'all', tx: true, pin: null, pinOn: true }, /* 一图秀 */
     asked: {},                   /* 触发词表勾选"我想问的" */
+    sessionOpen: true,           /* AI 对话栏开合（收起只隐藏，不结束会话） */
+    agentWidth: 0.35,            /* 会话列宽（25%–45%，默认 35%） */
+    onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
     kbTarget: null,              /* 数字键盘组件目标输入 */
     extra: { cbc: [], questions: D.questions.slice(), checked: [] } /* 本机写入（演示内存态） */
   };
@@ -439,8 +441,39 @@
 
   /* ================= 通用小组件 ================= */
   function pageHead(eyebrow, title, desc, actions) {
+    /* IP11（脚手架标准）：每页标题行常驻「和 AI 讨论」，点击拉起对话栏并携带本页关键信息（不代发） */
+    var discuss = '<button type="button" class="btn discuss-btn" data-act="discuss" ' +
+      'aria-label="和 AI 讨论本页内容（拉起 AI 对话栏并携带本页关键信息，不自动发送）">和 AI 讨论</button>';
     return '<header class="page-head"><p class="eyebrow">' + esc(eyebrow) + '</p><div class="ph-row"><h1>' + esc(title) + '</h1>' +
-      '<div class="actions">' + (actions || '') + '</div></div><p class="page-desc">' + desc + '</p></header>';
+      '<div class="actions">' + discuss + (actions || '') + '</div></div><p class="page-desc">' + desc + '</p></header>';
+  }
+
+  /* 本页关键信息（discussFacts）：事实陈述、无判定词、按页给不同事实摘要 */
+  function discussFacts() {
+    var v = state.route.view, sub = state.route.sub;
+    var c = cbcAll();
+    var last = c[c.length - 1] || {};
+    var L = ldtDays();
+    var geneDet = D.gene.filter(function (g) { return g.state === '检出'; }).length;
+    var geneNotTested = D.gene.filter(function (g) { return g.state === '未测'; }).length;
+    var base = '最近血常规 ' + (last.d || '—') + '：WBC ' + last.wbc + '、ALC ' + last.alc + '、Plt ' + last.plt + '、Hb ' + last.hgb + '（照抄报告原文）；共 ' + c.length + ' 次记录';
+    var byView = {
+      dash: base + '；基因 ' + D.gene.length + ' 项（检出 ' + geneDet + '、未测 ' + geneNotTested + '）；待问问题 ' + state.extra.questions.length + ' 条。',
+      records: '资料 ' + D.docsCount + ' 份；候选待核对（未核对不入事实层）。',
+      ww: base + (L ? '；LDT ' + L.days + ' 天（只算天数，未判读）' : '') + '；观察期无用药记录。',
+      labs: base + '；分系列指标卡 ' + metrics().length + ' 项（血象/生化/分子/体格）。',
+      onechart: '当前叠看 ' + state.chart.sel.length + ' 条（' + state.chart.sel.join('/') + '），时间范围 ' + ({ '3m': '近 3 月', '6m': '近 6 月', '12m': '近 12 月', all: '全部' }[state.chart.range] || '全部') + '。',
+      gene: '基因档案 ' + D.gene.length + ' 项：检出 ' + geneDet + '、未测 ' + geneNotTested + '（未测 ≠ 未检出）；报告口径照抄。',
+      med: sub === 'ae' ? '副作用记录 ' + D.ae.length + ' 条（词表按当前用药过滤）。'
+        : '当前用药：泽布替尼 160mg 每日两次（' + D.rxChanges.length + ' 次处方变更）；打卡记录见依从日历。',
+      trial: '本地试验快照 ' + D.trials.length + ' 条（登记状态，未核实）；分层线索见匹配页。',
+      comorb: 'CIRS 条目 ' + ((D.cirs||[]).length) + ' 条；在用药 ' + ((D.conmeds||[]).length) + ' 种（照抄，无相互作用判读）。',
+      nutr: '感染预防与营养语境条目（就诊要问清单）。',
+      mind: '心理记录 ' + filterPrivate(D.mood, 'ai').length + ' 条（私密条目默认不进 AI 上下文）。',
+      prep: '复诊准备：可导出资料包 + 问题清单 ' + state.extra.questions.length + ' 条。',
+      settings: '资料目录、解析模式与临床参考数据包版本（本机）。'
+    };
+    return byView[v] || base;
   }
   function subnav(view, items) {
     return '<nav class="subnav" aria-label="二级页签">' + items.map(function (it) {
@@ -568,15 +601,17 @@
       metricGroupsHTML();
   }
 
-  /* ---- 病情一图秀 onechart（左栏控制 + 右栏图） ---- */
+  /* ---- 病情一图秀 onechart（主图优先；左栏控制可折叠，AI 对话栏打开时自动收起） ---- */
   function pageOnechart() {
     var st = state.chart;
     var ranges = [['3m', '近 3 月'], ['6m', '近 6 月'], ['12m', '近 12 月'], ['all', '全部']];
+    var rangeLabel = (ranges.filter(function (r) { return r[0] === st.range; })[0] || ['', '全部'])[1];
     var head = pageHead('病情一图秀', '一图看变化',
-      '左边选时间与指标，右边即时重绘；每条线按自身范围缩放，不同指标数值不可比。图不判读。',
-      backHome());
+      '每条线按自身范围缩放，不同指标数值不可比；图不判读。指标越多，越建议用「收起指标」腾出图区。',
+      backHome() +
+      '<button type="button" class="btn" data-act="toggle-onechart-side" aria-expanded="' + (state.onechartSideOpen ? 'true' : 'false') + '" aria-controls="onechart-side">' +
+      (state.onechartSideOpen ? '收起指标' : '展开指标') + '</button>');
 
-    /* 左栏：时间范围 chips + 分组指标勾选（即时更新）+ 显示开关 */
     var groups = D.SERIES_ORDER.map(function (s) {
       var ms = metrics().filter(function (m) { return m.series === s; });
       return '<section class="pick-group"><h4 class="pick-group-head"><i class="dot" style="background:' + (SERIES_COLORS[s] || '#2f5fa8') + '"></i>' +
@@ -584,32 +619,56 @@
           var on = st.sel.indexOf(m.code) >= 0;
           return '<label class="pick-row"><input type="checkbox" data-act="pick-metric" data-code="' + m.code + '"' + (on ? ' checked' : '') +
             (m.qual ? ' data-qual="1"' : '') + '><span class="pick-name">' + esc(mShort(m)) + '</span>' +
-            '<span class="pick-unit">' + (m.qual ? '描述' : esc(m.unit)) + '</span></button></label>';
+            '<span class="pick-unit">' + (m.qual ? '描述' : esc(m.unit)) + '</span></label>';
         }).join('') + '</section>';
     }).join('');
 
-    var aside = '<aside class="onechart-side" aria-label="一图秀控制">' +
+    var aside = '<aside class="onechart-side" id="onechart-side" aria-label="一图秀控制">' +
       '<section class="side-block"><h3 class="side-title">时间范围</h3>' +
         '<div class="chips chips-wrap">' + ranges.map(function (r) {
           return '<button type="button" class="chip" data-act="range" data-range="' + r[0] + '" aria-pressed="' + (st.range === r[0]) + '">' + r[1] + '</button>';
         }).join('') + '</div></section>' +
       '<section class="side-block"><h3 class="side-title">显示</h3>' +
-        '<label class="switch-row"><input type="checkbox" data-act="tx-toggle"' + (st.tx ? ' checked' : '') + '><span>治疗节点（独立泳道，不压曲线）</span></label>' +
-        '<label class="switch-row"><input type="checkbox" data-act="pin-toggle"' + (st.pinOn ? ' checked' : '') + '><span>点选读数（点图上的点显示数值与来源）</span></label>' +
+        '<label class="switch-row"><input type="checkbox" data-act="tx-toggle"' + (st.tx ? ' checked' : '') + '><span>治疗节点</span></label>' +
+        '<label class="switch-row"><input type="checkbox" data-act="pin-toggle"' + (st.pinOn ? ' checked' : '') + '><span>点选读数</span></label>' +
       '</section>' +
-      '<section class="side-block side-pick"><h3 class="side-title">指标（最多 4 条）<span class="side-count" id="picker-count">' + st.sel.length + '/4</span></h3>' +
+      '<section class="side-block side-pick"><h3 class="side-title">指标<span class="side-count" id="picker-count">' + st.sel.length + '/4</span></h3>' +
         '<div class="pick-scroll">' + groups + '</div>' +
-        '<p class="muted small">选满 4 条后需先去一条再选新的；描述性指标不进折线。</p></section>' +
+        '<p class="muted small">最多 4 条；描述性指标不进折线。</p></section>' +
       '</aside>';
 
-    var legendNote = '<div class="chart-legend-note">图例里的区间是该指标<b>全部记录</b>的最小–最大，不是正常范围。</div>';
-    var body = '<div class="onechart-layout">' + aside +
+    /* 收起态：只留一条"已选指标"摘要条，点开即展开（主图优先） */
+    var collapsedBar = '<div class="onechart-collapsed" id="onechart-collapsed">' +
+      '<span class="oc-sum">已选 ' + st.sel.length + ' 条：' + (st.sel.map(function (c) { var m = metricByCode(c); return m ? mShort(m) : c; }).join('、') || '（无）') + '</span>' +
+      '<button type="button" class="btn btn-quiet" data-act="toggle-onechart-side">展开指标选择</button></div>';
+
+    var body = '<div class="onechart-layout' + (state.onechartSideOpen ? '' : ' side-collapsed') + '">' +
+      aside + collapsedBar +
       '<section class="card onechart-main"><div class="card-head"><h2 class="h2">叠看</h2>' +
-      '<span class="muted small" id="chart-sub">已选 ' + st.sel.length + ' 条 · ' + (ranges.filter(function (r) { return r[0] === st.range; })[0] || ['', ''])[1] + '</span></div>' +
-      legendNote +
+      '<span class="muted small" id="chart-sub">已选 ' + st.sel.length + ' 条 · ' + rangeLabel + '</span></div>' +
+      '<div class="chart-legend-note">图例区间是该指标<b>全部记录</b>的最小–最大，不是正常范围。</div>' +
       '<div id="chart-panel" aria-live="polite">' + chartSVG(st.sel, st.range, st.tx, st.pinOn ? st.pin : null) + '</div>' +
       '</section></div>';
     return head + body;
+  }
+
+  /* 主图优先：容器变窄（AI 对话栏打开/窗口变窄）时自动收起左栏；恢复宽屏时按用户选择还原。 */
+  function applyOnechartLayout() {
+    var layout = $('.onechart-layout');
+    if (!layout) return;
+    var wrap = layout.closest('#view') || layout;
+    var w = wrap.getBoundingClientRect().width;
+    /* 业务区宽度 < 860px 时自动收起指标选择区：图区优先（AI 对话栏打开后业务区约 710px） */
+    var auto = w < 860;
+    layout.classList.toggle('side-collapsed', auto || !state.onechartSideOpen);
+    layout.classList.toggle('auto-collapsed', auto);
+    var btn = $('[data-act="toggle-onechart-side"]');
+    if (btn) {
+      btn.textContent = layout.classList.contains('side-collapsed') ? '展开指标' : '收起指标';
+      btn.setAttribute('aria-expanded', String(!layout.classList.contains('side-collapsed')));
+    }
+    var bar = $('#onechart-collapsed .oc-sum');
+    if (bar) bar.textContent = '已选 ' + state.chart.sel.length + ' 条：' + (state.chart.sel.map(function (c) { var m = metricByCode(c); return m ? mShort(m) : c; }).join('、') || '（无）');
   }
 
   /* ---- 基因与预后档案 gene ---- */
@@ -714,55 +773,92 @@
 
   /* ---- 临床研究 trial / trial/match ---- */
   function trialTierName(t) { return { local: '本地库命中', external: '外部工具线索', pending: '待确认规则' }[t.tier]; }
+  /* 35 号分层匹配（替代匹配指数）：结构化命中 / 文本命中 / 宽口径命中 + 证据链 + 三态
+     - 禁止数值综合分；禁止"适合你/能入组"；缺字段判「无法自动匹配」，不判「不适用」。 */
+  var WIDE_TERMS = /实体瘤|淋巴增殖性疾病|血液肿瘤|任意|均可|不限/;
+
   function matchTrial(t) {
-    /* 三档判定逐字段：重合 / 不重合 / 无法判定；匹配指数只算字段重合度（分数，不排序） */
-    var P = D.matchProfile, hit = 0, total = 0, rows = [];
+    var P = D.matchProfile;
+    var structured = [], text = [], wide = [], cannot = [], evidence = [];
     Object.keys(t.fields).forEach(function (k) {
-      var req = t.fields[k], have = P[k] || '';
-      total++;
-      var res, cls;
-      if (/未测|未记录/.test(have) && /需要|≥|任意|未测也可以/.test(req) === false) { res = '无法判定'; cls = 'grey'; }
-      else if (/任意|未测也可以/.test(req) || req === have) { res = '重合'; cls = 'ok'; }
-      else if ((req === '用过' || req === '在用（泽布替尼）') && /在用|用过/.test(have)) { res = '重合'; cls = 'ok'; }
-      else if (req === '≥65' && parseInt(have, 10) >= 65) { res = '重合'; cls = 'ok'; }
-      else if (req === '≥65 或不合条件化疗' && parseInt(have, 10) >= 65) { res = '重合'; cls = 'ok'; }
-      else if (req === '≥18' && parseInt(have, 10) >= 18) { res = '重合'; cls = 'ok'; }
-      else if (req === 'ECOG 0–2' || req === 'ECOG 0–1' || req === 'ECOG 0–3') {
-        if (have === '未记录') { res = '无法判定'; cls = 'grey'; } else { res = '重合'; cls = 'ok'; }
-      }
-      else { res = '不重合'; cls = 'warn'; }
-      if (res === '重合') hit++;
-      rows.push('<tr><td>' + esc(k) + '</td><td>' + esc(req) + '</td><td>' + esc(have) + '</td><td>' + badge(res, cls) + '</td></tr>');
+      var req = t.fields[k], have = P[k] || '未记录';
+      var missing = /未测|未记录|未查/.test(have);
+      if (missing) { cannot.push({ field: k, req: req, have: have, why: '本地未建档「' + k + '」' }); return; }
+      if (WIDE_TERMS.test(req)) { wide.push({ field: k, req: req, have: have }); return; }
+      var hitStruct = false;
+      if (req === have) hitStruct = true;
+      else if ((req === '用过' || req === '在用（泽布替尼）') && /在用|用过/.test(have)) hitStruct = true;
+      else if (/^≥(\d+)/.test(req)) { var n = parseInt(req.match(/^≥(\d+)/)[1], 10); if (parseInt(have, 10) >= n) hitStruct = true; }
+      else if (/^ECOG/.test(req) && /^\d/.test(have)) hitStruct = true;
+      if (hitStruct) structured.push({ field: k, req: req, have: have });
+      else text.push({ field: k, req: req, have: have });
     });
-    return { hit: hit, total: total, rows: rows.join('') };
+    /* 每类命中都带证据：试验要求原文 + 我的建档值 + 来源 */
+    function evRows(list) {
+      return list.map(function (x) {
+        return '<tr><td>' + esc(x.field) + '</td><td><q>' + esc(x.req) + '</q></td><td>' + esc(x.have) + '</td><td class="muted">' + esc(D.matchSource[x.field] || '档案') + '</td></tr>';
+      }).join('');
+    }
+    var tier = structured.length ? 'structured' : text.length ? 'text' : wide.length ? 'wide' : 'none';
+    return {
+      tier: tier, structured: structured, text: text, wide: wide, cannot: cannot,
+      evStruct: evRows(structured), evText: evRows(text), evWide: evRows(wide),
+      cannotRows: cannot.map(function (c) {
+        return '<tr><td>' + esc(c.field) + '</td><td><q>' + esc(c.req) + '</q></td><td>' + esc(c.have) + '</td><td class="muted">' + esc(c.why) + '</td></tr>';
+      }).join('')
+    };
   }
+  function tierBadge(tier) {
+    return { structured: badge('结构化命中', 'ok'), text: badge('文本命中', 'warn'), wide: badge('宽口径命中', 'grey'), none: badge('无命中', 'grey') }[tier];
+  }
+  function tierLabel(tier) {
+    return { structured: '结构化命中', text: '文本命中', wide: '宽口径命中', none: '无命中' }[tier];
+  }
+
   function pageTrial() {
     var sub = state.route.sub || 'list';
-    var head = pageHead('临床研究', '三档判定与匹配指数',
-      '匹配指数只算字段重合度（如 5/7），显示为分数、不做推荐排序；private 三出口过滤；缺字段一律「无法判定」。', backHome());
+    var head = pageHead('临床研究', '分层线索与证据链',
+      '产出的是带证据的检索线索，不是入组结论（脚手架 35 号）：结构化/文本/宽口径三层命中 + 证据链 + 三态；不给数值适配度、不排序、不推荐。', backHome());
     var nav = subnav('trial', [['研究列表', 'list'], ['匹配', 'match']]);
+    var srcNote = '<p class="muted small">来源通道：本地快照（snapshotDate ' + esc(D.trialSnapshot) + '）+ 在线通道（ICT RP / 药物临床试验登记平台）。' +
+      'FAILED 的来源不算「查过」，见列表页终态列。登记 ≠ 有效 ≠ 安全 ≠ 可入组。</p>';
     var body;
     if (sub === 'match') {
-      var full = Object.keys(D.matchProfile).filter(function (k) { return !/未测|未记录/.test(D.matchProfile[k]); }).length;
-      body = '<section class="card"><div class="card-head"><h2 class="h2">匹配（帮我匹配）</h2>' + badge('字段重合度') + '</div>' +
-        '<p class="muted">档案完整度 ' + full + '/' + Object.keys(D.matchProfile).length + ' · 全部来自既有病情数据；排序按数据来源顺序，不按匹配度。</p>' +
-        '<div class="row">' + aiBtn('请基于我的档案字段（见上下文）列出值得我去核实的试验条目，并标注每条缺哪些字段（不判定我是否够格）', 'AI 协助匹配') + '</div>' +
-        D.trials.slice(0, 6).map(function (t) {
-          var m = matchTrial(t);
-          return '<details class="trial-fold"><summary><b>' + esc(t.id) + ' ' + esc(t.title) + '</b> · 匹配指数 ' + m.hit + '/' + m.total + ' · ' + badge(trialTierName(t)) + '</summary>' +
-            '<table><thead><tr><th>字段</th><th>试验要求（原文）</th><th>我的档案</th><th>判定</th></tr></thead><tbody>' + m.rows + '</tbody></table>' +
-            '<p class="muted">缺字段一律「无法判定」；是否入组由研究医生评估，本表不给结论。</p></details>';
+      var pk = Object.keys(D.matchProfile);
+      var full = pk.filter(function (k) { return !/未测|未记录|未查/.test(D.matchProfile[k]); }).length;
+      var scored = D.trials.map(function (t) { return { t: t, m: matchTrial(t) }; });
+      /* 排序只按命中层级（结构→文本→宽口径），同层按快照顺序；不是"匹配度"排序 */
+      var rank = { structured: 0, text: 1, wide: 2, none: 3 };
+      scored.sort(function (a, b) { return rank[a.m.tier] - rank[b.m.tier]; });
+      var counts = { structured: 0, text: 0, wide: 0, none: 0 };
+      scored.forEach(function (x) { counts[x.m.tier]++; });
+      body = '<section class="card"><div class="card-head"><h2 class="h2">分层线索（' + D.trials.length + ' 条快照）</h2>' + badge('35 号：无综合分') + '</div>' +
+        '<p class="muted">建档完整度 <b>' + full + '/' + pk.length + '</b>（只有已确认入库字段参与匹配）。本页统计：结构化 ' + counts.structured + ' · 文本 ' + counts.text + ' · 宽口径 ' + counts.wide + ' · 无命中 ' + counts.none + '。层内按快照顺序，不按"匹配度"。</p>' +
+        '<div class="row">' + aiBtn('基于我的已确认建档字段，帮我整理每条试验的命中证据与「要问研究团队的问题」清单（不要判断我是否够格或建议参加）', 'AI 协助整理命中证据') + '</div>' +
+        srcNote +
+        scored.map(function (x) {
+          var t = x.t, m = x.m;
+          var sec = '';
+          if (m.structured.length) sec += '<h4 class="h3">结构化命中（' + m.structured.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evStruct + '</tbody></table>';
+          if (m.text.length) sec += '<h4 class="h3">文本命中（' + m.text.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evText + '</tbody></table>';
+          if (m.wide.length) sec += '<h4 class="h3">宽口径命中（' + m.wide.length + '，排在本层末尾）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文（宽口）</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evWide + '</tbody></table>';
+          if (m.cannot.length) sec += '<h4 class="h3">无法自动匹配（' + m.cannot.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>原因</th></tr></thead><tbody>' + m.cannotRows + '</tbody></table>';
+          if (!sec) sec = '<p class="muted">本条未命中任何层；缺字段条目见「无法自动匹配」。</p>';
+          return '<details class="trial-fold"><summary><b>' + esc(t.id) + '</b> ' + esc(t.title) + ' · ' + tierBadge(m.tier) +
+            ' · <span class="muted">' + esc(t.phase || '') + ' · ' + esc(t.source) + '</span></summary>' +
+            sec +
+            '<p class="muted small">来源：' + esc(t.source) + '（终态 SUCCESS）· 快照 ' + esc(D.trialSnapshot) + ' · 登记状态，未核实。是否适合、能否入组由研究团队按方案评估；本表不给结论。</p></details>';
         }).join('') +
-        '<div class="row"><button type="button" class="btn" data-act="export-trial">导出匹配结果（private 打码）</button>' +
+        '<div class="row"><button type="button" class="btn" data-act="export-trial">导出命中证据（private 打码）</button>' +
         '<pre class="agent-log" id="trialExport" hidden></pre></div></section>';
     } else {
-      body = '<section class="card"><div class="card-head"><h2 class="h2">研究列表（演示虚构）</h2>' + badge('M4 落库前为演示数据') + '</div>' +
-        '<div class="table-wrap"><table><thead><tr><th>编号</th><th>标题</th><th>三档</th><th>匹配指数</th></tr></thead><tbody>' +
+      body = '<section class="card"><div class="card-head"><h2 class="h2">研究列表（本地快照 ' + esc(D.trialSnapshot) + '）</h2>' + badge('M4 已落库 461 条') + '</div>' +
+        '<div class="table-wrap"><table><thead><tr><th>编号</th><th>标题</th><th>层</th><th>来源通道</th><th>登记状态</th></tr></thead><tbody>' +
         D.trials.map(function (t) {
           var m = matchTrial(t);
-          return '<tr><td>' + t.id + '</td><td>' + esc(t.title) + '</td><td>' + badge(trialTierName(t)) + '</td><td class="num">' + m.hit + '/' + m.total + '</td></tr>';
+          return '<tr><td>' + esc(t.id) + '</td><td>' + esc(t.title) + '</td><td>' + tierBadge(m.tier) + '</td><td>' + esc(t.source) + '</td><td class="muted">登记状态，未核实</td></tr>';
         }).join('') + '</tbody></table></div>' +
-        '<p class="muted">全部条目标【演示虚构】；本地库（fetch-cll-trials 四件套）M4 接入后替换；NMPA 获批状态一律标「待官网复核」。</p></section>';
+        '<p class="muted">全库 461 条经 fetch-cll-trials 四件套入库（本地 sqlite）；本页演示 5 条。在线通道终态如实透传：FAILED/无覆盖 ≠ 查过。NMPA 获批状态一律「待官网复核」。</p></section>';
     }
     return head + nav + body;
   }
@@ -856,6 +952,7 @@
     });
     main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
+    if (state.route.view === 'onechart') applyOnechartLayout();
   }
 
   /* ================= 事件委托 ================= */
@@ -914,6 +1011,29 @@
         redrawChart(); break;
       }
       case 'pin-clear': state.chart.pin = null; redrawChart(); break;
+      case 'toggle-onechart-side': {
+        state.onechartSideOpen = !state.onechartSideOpen;
+        applyOnechartLayout();
+        break;
+      }
+      case 'discuss': {
+        /* IP11：拉起 AI 对话栏 + 携带本页关键信息进输入框；不自动发送（IP10 同款守卫） */
+        setSessionOpen(true);
+        var pTitle = ($('#view h1') || {}).textContent || '本页';
+        var facts = discussFacts();
+        var draft = '【' + pTitle + ' · 本页关键信息】' + facts + '\n\n（请基于上面这些我记录的事实，帮我整理成就诊可以问医生的问题；不要给判断或建议）';
+        var ta = $('#aiPrompt');
+        if (ta) { ta.value = draft; ta.focus(); }
+        var log = $('#agentLog');
+        if (log) log.textContent = '【' + pTitle + '】已把本页关键信息填入输入框，未发送。';
+        toast('已带上本页关键信息；发送由你手动完成');
+        break;
+      }
+      case 'agent-toggle': {
+        /* 顶栏 AI 对话按钮：五态里本页只做 打开/收起（独立启动无原生会话，显示暂不可用态文案） */
+        setSessionOpen(!state.sessionOpen);
+        break;
+      }
       case 'checkin-done':
         D.checkins.push({ d: '2026-10-25', state: '已服' });
         toast('已记录：今日已服（回到看板可从「今日」卡查看）'); render(); break;
@@ -989,14 +1109,7 @@
       case 'kb-close': { var kp = el.closest('.keypad'); if (kp) kp.setAttribute('hidden', ''); break; }
       case 'ai-send': toast('原型不发起真实请求：提示词仍在输入框，待你手动发送'); break;
       case 'ai-clear': $('#aiPrompt').value = ''; break;
-      case 'panel-toggle': {
-        var s = $('#session');
-        var hiddenNow = !s.hasAttribute('hidden');
-        if (hiddenNow) s.setAttribute('hidden', ''); else s.removeAttribute('hidden');
-        el.textContent = hiddenNow ? '展开会话区' : '收起会话区';
-        el.setAttribute('aria-expanded', hiddenNow ? 'false' : 'true');
-        break;
-      }
+      case 'panel-toggle': setSessionOpen(!state.sessionOpen); break;
     }
   });
 
@@ -1038,6 +1151,70 @@
     }
   });
 
+  /* AI 对话栏开合（五态文案沿用家族：AI 对话 / 打开 / 收起 / 暂不可用）。
+     收起只切 hidden 与按钮文案，不结束、不清空会话——草稿与筛选原样保留。 */
+  function agentLabelText() {
+    if (state.sessionOpen) return '收起 AI 对话';
+    return '打开 AI 对话';
+  }
+  function refreshAgentChrome() {
+    var btn = $('#agent-toggle');
+    var label = $('#agent-label');
+    var session = $('#session');
+    var splitter = $('#agent-splitter');
+    if (session) session.hidden = !state.sessionOpen;
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(state.sessionOpen));
+      btn.dataset.state = state.sessionOpen ? 'open' : 'collapsed';
+    }
+    if (label) label.textContent = agentLabelText();
+    if (btn) btn.setAttribute('aria-label', 'AI 对话：' + agentLabelText());
+    if (splitter) splitter.hidden = !state.sessionOpen;
+  }
+  var AGENT_KEY = 'lymPal.agent-pane.v1';
+  var AGENT = { min: 0.25, max: 0.45, def: 0.35, step: 0.02 };
+  function agentWidthApply(w) {
+    var clamped = Math.min(AGENT.max, Math.max(AGENT.min, Number(w) || AGENT.def));
+    state.agentWidth = Math.round(clamped * 10000) / 10000;
+    document.body.style.setProperty('--agent-col', Math.round(state.agentWidth * 100) + '%');
+    var sp = $('#agent-splitter');
+    if (sp) sp.setAttribute('aria-valuenow', String(Math.round(state.agentWidth * 100)));
+    try { localStorage.setItem(AGENT_KEY, JSON.stringify({ width: state.agentWidth })); } catch (e) { /* 隐私模式忽略 */ }
+    if (state.route.view === 'onechart') applyOnechartLayout();
+  }
+  function agentShellWire() {
+    var sp = $('#agent-splitter');
+    if (!sp) return;
+    try {
+      var saved = JSON.parse(localStorage.getItem(AGENT_KEY) || 'null');
+      if (saved && isFinite(saved.width)) { state.agentWidth = saved.width; document.body.style.setProperty('--agent-col', Math.round(saved.width * 100) + '%'); }
+    } catch (e) { /* 坏值忽略 */ }
+    var host = null;
+    sp.addEventListener('pointerdown', function (e) { e.preventDefault(); host = $('#app'); sp.setPointerCapture(e.pointerId); });
+    sp.addEventListener('pointermove', function (e) {
+      if (!host) return;
+      var r = host.getBoundingClientRect();
+      if (!r.width) return;
+      agentWidthApply((r.right - e.clientX) / r.width);
+    });
+    sp.addEventListener('pointerup', function () { host = null; });
+    sp.addEventListener('pointercancel', function () { host = null; });
+    sp.addEventListener('keydown', function (e) {
+      var d = { ArrowLeft: AGENT.step, ArrowRight: -AGENT.step }[e.key];
+      if (d !== undefined) { e.preventDefault(); agentWidthApply((state.agentWidth || AGENT.def) + d); return; }
+      if (e.key === 'Home') { e.preventDefault(); agentWidthApply(AGENT.max); }
+      if (e.key === 'End') { e.preventDefault(); agentWidthApply(AGENT.min); }
+    });
+  }
+
+  function setSessionOpen(open) {
+    state.sessionOpen = !!open;
+    document.body.setAttribute('data-session', state.sessionOpen ? 'open' : 'closed');
+    refreshAgentChrome();
+    /* 开合后重算一图秀布局（主图优先，不被左栏挤压） */
+    if (state.route.view === 'onechart') applyOnechartLayout();
+  }
+
   function redrawChart() {
     /* 16 号：筛选变化只重绘 #chart-panel，不整页重渲染 */
     var panel = $('#chart-panel');
@@ -1053,8 +1230,11 @@
 
   /* ================= 启动 ================= */
   window.addEventListener('hashchange', render);
+  window.addEventListener('resize', function () { if (state.route.view === 'onechart') applyOnechartLayout(); });
   window.addEventListener('DOMContentLoaded', function () {
     $('#view-sub-count').textContent = VIEW_SUBS.length; /* 自检计数（页脚常显） */
+    document.body.setAttribute('data-session', state.sessionOpen ? 'open' : 'closed');
+    agentShellWire();
     render();
     if (location.protocol !== 'file:') {
       loadProfile().then(function (p) { if (p) { hydrate(p); render(); } });

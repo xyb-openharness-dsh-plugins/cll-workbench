@@ -53,7 +53,24 @@ h1{font-size:clamp(24px,2.2vw,30px); letter-spacing:-.01em}
 .conn{font-size:12.5px; color:var(--muted)}
 
 /* ---------- 三栏布局（≥980px） ---------- */
-.app{flex:1 0 auto; display:grid; grid-template-columns:220px minmax(0,1fr) 300px; gap:0; align-items:stretch}
+.app{
+  flex:1 0 auto; display:grid; gap:0; align-items:stretch;
+  /* 会话宽度走变量（25%–45%，默认 35%）：收起时归 0，主图自动吃满 */
+  grid-template-columns:220px minmax(0,1fr) 6px var(--agent-col, 35%);
+}
+body[data-session="closed"] .app{grid-template-columns:220px minmax(0,1fr)}
+body[data-session="closed"] .session,body[data-session="closed"] .agent-splitter{display:none!important}
+.agent-splitter{
+  cursor:col-resize; background:transparent; border-left:1px solid var(--line);
+  position:relative; touch-action:none;
+}
+.agent-splitter::after{
+  content:""; position:absolute; inset:0 2px; border-radius:2px; background:transparent; transition:background .14s;
+}
+.agent-splitter:hover::after,.agent-splitter:focus-visible::after{background:var(--brand-soft)}
+.btn-ai-toggle{display:inline-flex; align-items:center; gap:6px}
+.btn-ai-toggle .ic{width:16px; height:16px; flex:none}
+.btn-ai-toggle[data-state="collapsed"]{background:var(--brand-soft); border-color:var(--brand); color:var(--brand-deep); font-weight:600}
 .sidebar{padding:18px 12px; border-right:1px solid var(--line)}
 .sidebar ul{list-style:none; padding:0; margin:0}
 .sidebar a{
@@ -67,7 +84,7 @@ h1{font-size:clamp(24px,2.2vw,30px); letter-spacing:-.01em}
 #view{max-width:1080px; width:100%; margin:0 auto; padding:24px 28px 44px; outline:none}
 
 /* ---------- AI 会话区 ---------- */
-.session{border-left:1px solid var(--line); background:var(--surface); padding:16px; display:flex; flex-direction:column; gap:8px}
+.session{border-left:1px solid var(--line); background:var(--surface); padding:14px 14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; overflow:auto}
 .session-body textarea{
   width:100%; border:1px solid var(--line-strong); border-radius:var(--radius-sm);
   padding:8px 10px; font:inherit; font-size:12.5px; resize:vertical;
@@ -217,6 +234,16 @@ q.quote{color:var(--ink-2); font-style:normal}
 
 /* ---------- 一图秀（左栏控制 + 右栏图） ---------- */
 .onechart-layout{display:grid; grid-template-columns:minmax(232px,268px) minmax(0,1fr); gap:18px; align-items:start}
+/* 收起态：主图独占；左栏让位给图（用户 2026-10-25：AI 窗口出现时不挤主图） */
+.onechart-layout.side-collapsed{grid-template-columns:minmax(0,1fr)}
+.onechart-layout.side-collapsed .onechart-side{display:none}
+.onechart-collapsed{display:none}
+.onechart-layout.side-collapsed .onechart-collapsed{
+  display:flex; align-items:center; gap:10px; margin-bottom:10px;
+  padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--brand-soft);
+  font-size:12.5px; color:var(--ink-2); grid-column:1 / -1;
+}
+.onechart-layout.side-collapsed .onechart-collapsed .btn-quiet{margin-left:auto}
 .onechart-side{
   display:flex; flex-direction:column; gap:14px;
   padding:16px; border:1px solid var(--line); border-radius:var(--radius);
@@ -383,6 +410,13 @@ dialog.modal::backdrop{background:rgba(44,42,58,.35); backdrop-filter:blur(2px)}
 }
 
 /* ---------- 窄宽（30 号第一版：<980px 堆叠；卡内纵向，minmax(0,1fr)） ---------- */
+/* 业务区被 AI 对话栏压缩后：一图秀控制面板自动让位，图区保持可读宽度 */
+#view{container-type:inline-size}
+@container (max-width: 860px){
+  .onechart-layout{grid-template-columns:minmax(0,1fr)}
+  .onechart-side{position:static}
+  .pick-scroll{max-height:none}
+}
 @media (max-width:980px){
   .app{grid-template-columns:minmax(0,1fr)}
   .sidebar{border-right:0; border-bottom:1px solid var(--line)}
@@ -397,4 +431,19 @@ dialog.modal::backdrop{background:rgba(44,42,58,.35); backdrop-filter:blur(2px)}
   .onechart-side{position:static}
   .pick-scroll{max-height:none}
   .chart-wrap{overflow-x:auto}
+}
+
+/* ---------- 35 号分层匹配表 ---------- */
+.match-tbl{margin:6px 0 12px}
+.match-tbl q{font-style:normal; color:var(--ink-2)}
+.trial-fold summary{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.trial-fold .h3{margin:10px 0 4px}
+.discuss-btn{background:var(--brand-soft); border-color:var(--brand); color:var(--brand-deep)}
+.discuss-btn:hover{background:#e6e3f6}
+
+/* 业务区窄时（AI 对话栏打开）：一图秀左栏自动让位由 .side-collapsed 处理；这里收紧卡内边距保图宽 */
+@container (max-width: 620px){
+  .onechart-main .card-head{flex-wrap:wrap}
+  .chart-legend-note{font-size:11.5px}
+  .lg-item{padding:3px 7px; font-size:11.5px}
 }

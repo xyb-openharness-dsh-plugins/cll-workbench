@@ -228,8 +228,29 @@
     gene: gene, rxChanges: rxChanges, pathway: pathway, checkins: checkins, ae: ae, aeVocab: aeVocab,
     cirs: cirs, conmeds: conmeds, indications: indications, indicationSource: indicationSource,
     ldtLimitQuote: ldtLimitQuote, ldtLimitSrc: ldtLimitSrc, questions: questions,
-    trials: trials, matchProfile: matchProfile, docs: docs, pendingCandidate: pendingCandidate,
+    trials: trials.map(function (t, i) {
+      /* 演示快照元数据：phase 与来源通道（真实值来自 M4 sqlite） */
+      var meta = [
+        ['III', 'chinadrugtrials'], ['II', 'ictrp'], ['I/II', 'chinadrugtrials'], ['III', 'chinadrugtrials'],
+        ['登记研究', 'ictrp'], ['II', 'chinadrugtrials'], ['III', 'ictrp'], ['I/II', 'chinadrugtrials'],
+        ['III', 'ictrp'], ['II', 'chinadrugtrials']
+      ][i] || ['—', 'chinadrugtrials'];
+      return Object.assign({}, t, { phase: meta[0], source: meta[1] });
+    }), matchProfile: matchProfile, docs: docs, pendingCandidate: pendingCandidate,
     mood: mood, mrdVocab: mrdVocab, geneVocab: geneVocab,
     SERIES_ORDER: SERIES_ORDER, seriesNote: seriesNote
   };
 })();
+/* 35 号分层匹配所需的建档来源与快照日期（演示值；真实来源在 M4 库里） */
+window.LYMPAL_DEMO.matchSource = {
+  '年龄': '病情整理 · 出生年 1963（自算，仅展示）',
+  '诊断': '病情整理 · 诊断报告原文（2024-11-12）',
+  'del(17p)/TP53': '基因与预后档案 · FISH 报告（2024-11-15）',
+  'IGHV': '基因与预后档案 · 未测',
+  '既往 BTKi': '口服药与治疗 · 处方变更（2026-06-01）',
+  '基线血象': '指标检测 · 血常规（2024-11-12 起）',
+  '体能状态': '未建档'
+};
+window.LYMPAL_DEMO.trialSnapshot = '2026-10-25';
+window.LYMPAL_DEMO.docsCount = 6;
+window.LYMPAL_DEMO.comorb = window.LYMPAL_DEMO.comorb || [];
