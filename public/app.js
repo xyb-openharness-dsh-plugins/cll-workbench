@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.6.0' };
+  var APP_INFO = { version: '0.7.0' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
@@ -84,7 +84,7 @@
     onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
     trialFilter2: { q: '', scope: 'all', status: 'all' }, /* 检索页筛选 */
     trialPrefs: { biopsy: false, placebo: false, city: 'all' }, /* 我的偏好：不参与医学判断 */
-    trialFavs: [],                /* 收藏（跟踪列表，内存态） */
+    trialFavs: [],                /* 收藏：[{id,state,savedOn,note}] state=watching|asking|archived */
     kbTarget: null,              /* 数字键盘组件目标输入 */
     extra: { cbc: [], questions: D.questions.slice(), checked: [] } /* 本机写入（演示内存态） */
   };
@@ -827,6 +827,11 @@
     ];
   }
 
+  function favIndex(id) {
+    for (var i = 0; i < state.trialFavs.length; i++) { if (state.trialFavs[i].id === id) return i; }
+    return -1;
+  }
+  var FAV_STATE = { watching: '在跟', asking: '准备问', archived: '已归档' };
   function trialOf(i) {
     var t = D.trials[i] || {};
     var x = (D.trialExtras || [])[i] || {};
@@ -904,8 +909,8 @@
       '<div class="crit-list">' + top.map(critLine).join('') + '</div>' +
       (rest.length ? '<details class="crit-more"><summary>其余 ' + rest.length + ' 条条件</summary><div class="crit-list">' + rest.map(critLine).join('') + '</div></details>' : '') +
       '<div class="trial-actions">' +
-        '<button type="button" class="btn ' + (state.trialFavs.indexOf(t.id) >= 0 ? 'btn-quiet' : 'btn-primary') + '" data-act="trial-fav" data-id="' + esc(t.id) + '">' +
-          (state.trialFavs.indexOf(t.id) >= 0 ? '已收藏（跟踪中）' : '收藏并跟踪') + '</button>' +
+        '<button type="button" class="btn ' + (favIndex(t.id) >= 0 ? 'btn-quiet' : 'btn-primary') + '" data-act="trial-fav" data-id="' + esc(t.id) + '">' +
+          (favIndex(t.id) >= 0 ? '已收藏（' + FAV_STATE[state.trialFavs[favIndex(t.id)].state] + '）' : '收藏并跟踪') + '</button>' +
         '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
         '<button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看条件原文与中心</button>' +
       '</div>' +
@@ -918,8 +923,10 @@
     var fields = matchProfileFields();
     var missing = fields.filter(function (f) { return !f.v; });
     var all = trialMatches();
-    var fit = all.filter(function (m) { return m.band !== 'ineligible'; });
-    var bad = all.filter(function (m) { return m.band === 'ineligible'; });
+    /* 排序：待确认项少者优先 → 粗筛符合度高者优先（与页面文案一致，不是"匹配度排名"） */
+    var byInfo = function (a, b) { return (a.unknown - b.unknown) || (b.pct - a.pct); };
+    var fit = all.filter(function (m) { return m.band !== 'ineligible'; }).sort(byInfo);
+    var bad = all.filter(function (m) { return m.band === 'ineligible'; }).sort(byInfo);
     var pref = state.trialPrefs || {};
     return '<div class="notice"><b>这里的试验条目是演示数据</b>（T-01…T-10），不是真实在招试验。' +
       '真实版本须接登记平台，逐条显示登记号、状态与核验日期；没有核验日期的只显示「未核验」，不显示「招募中」。</div>' +
@@ -960,7 +967,7 @@
       if (f.scope !== 'all' && t.scope !== f.scope) return false;
       if (f.status !== 'all' && t.status !== f.status) return false;
       return true;
-    });
+    }).sort(function (a, b) { return (a.unknown - b.unknown) || (b.pct - a.pct); });
     return '<div class="notice">检索是「按条件找」，不是「替你挑」：排序用同一套逐条对照，不改写条件，也不隐藏不符合的条目。</div>' +
       '<section class="card"><div class="card-head"><h2 class="h2">筛条件</h2><span class="muted small">只看条目本身；「与我相关」的判断在匹配页</span></div>' +
       '<div class="pref-row">' +
@@ -980,31 +987,61 @@
   }
 
   /* ---- 二级页 3：收藏与跟踪（跟踪"试验变了什么"，不是"我该不该进"） ---- */
+  var TRIAL_TRACK_NOTE = '跟踪的是「试验变了什么」，不是「我该不该进」。每次状态、中心、截止日期、入组条件变化都单独记一条，带来源与日期；不合并成"最新情况"，也不预测结果。';
+
   function trialSavedBody() {
     var favs = state.trialFavs || [];
     if (!favs.length) {
-      return '<div class="notice">跟踪的是「试验变了什么」，不是「我该不该进」。每次状态、中心、截止日期、入组条件变化都单独记一条，带来源与日期；不合并成"最新情况"，也不预测结果。</div>' +
-        '<div class="chart-empty"><p>还没有收藏的试验。在「匹配」里点「收藏并跟踪」，这里才会出现跟踪线。</p></div>';
+      return '<div class="notice"><b>收藏 = 跟踪变化。</b>' + TRIAL_TRACK_NOTE + '</div>' +
+        '<div class="chart-empty"><p>还没有收藏的试验。在「匹配」或「检索」里点「收藏并跟踪」，这里才会出现跟踪线。</p>' +
+        '<p class="muted small">收藏只记「哪条 + 什么时候 + 我的状态」，不改动任何入组条件。</p></div>';
     }
-    return '<div class="notice">跟踪的是「试验变了什么」…（同上口径）</div>' +
-      favs.map(function (id) {
-        var m = trialMatches().filter(function (x) { return x.t.id === id; })[0];
-        if (!m) return '';
-        var t = m.t;
-        var unknown = m.evals.filter(function (e) { return e.state === 'undetermined'; }).slice(0, 3);
-        return '<section class="card saved-card"><div class="card-head"><div>' +
-          '<div class="trial-tags">' + badge(TRIAL_STATUS[t.status] || t.status, t.status === 'recruiting' ? 'ok' : t.status === 'suspended' ? 'warn' : 'grey') +
-          badge('核验 ' + (t.verifiedOn || '未核验'), t.verifiedOn ? '' : 'warn') + '</div>' +
-          '<h2 class="h2">' + esc(t.id) + ' · ' + esc(t.title) + '</h2>' +
-          '<p class="muted small">' + esc(TRIAL_SCOPE[t.scope] || '') + ' · ' + esc((t.sites || []).map(function (x) { return x.city; }).join(' / ') || '中心待定') + '</p></div>' +
-          '<div class="fit ' + BAND[m.band][1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + BAND[m.band][0] + '</em></div></div>' +
-          (t.status === 'suspended' ? '<div class="notice">这条已暂停招募。你收藏之后状态变了，记录仍在；要不要继续等，去门诊问研究护士。</div>' : '') +
-          '<div class="crit-mini">' + (unknown.length ? unknown.map(function (e) { return '<span>? ' + esc(e.text) + '</span>'; }).join('') : '<span>没有待确认项</span>') + '</div>' +
-          '<div class="trial-actions">' +
-            '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
-            '<button type="button" class="btn btn-quiet" data-act="trial-fav" data-id="' + esc(t.id) + '">取消收藏</button>' +
-          '</div></section>';
-      }).join('');
+    var matches = trialMatches();
+    var act = favs.filter(function (f) { return f.state !== 'archived'; });
+    var arc = favs.filter(function (f) { return f.state === 'archived'; });
+
+    function card(f) {
+      var m = matches.filter(function (x) { return x.t.id === f.id; })[0];
+      if (!m) return '';
+      var t = m.t;
+      var unknown = m.evals.filter(function (e) { return e.state === 'undetermined'; }).slice(0, 3);
+      var track = [
+        { on: f.savedOn, text: '我把它加进跟踪', source: '本机收藏' },
+        t.verifiedOn ? { on: t.verifiedOn, text: '录入这一版登记摘要并核验（状态：' + (TRIAL_STATUS[t.status] || t.status) + '）', source: '登记平台摘录' } : null,
+        t.status === 'suspended' ? { on: (t.verifiedOn || f.savedOn), text: '状态改为「暂停招募」', source: '登记平台摘录' } : null
+      ].filter(Boolean).sort(function (a, b) { return a.on < b.on ? 1 : -1 });
+
+      return '<section class="card saved-card"><div class="card-head"><div>' +
+        '<div class="trial-tags">' +
+          badge(TRIAL_STATUS[t.status] || t.status, t.status === 'recruiting' && t.verifiedOn ? 'ok' : t.status === 'suspended' ? 'warn' : 'grey') +
+          badge('收藏于 ' + f.savedOn, '') +
+          badge(FAV_STATE[f.state], f.state === 'asking' ? 'warn' : 'grey') +
+          (t.verifiedOn ? badge('核验 ' + t.verifiedOn, '') : badge('未核验', 'warn')) +
+        '</div>' +
+        '<h2 class="h2">' + esc(t.id) + ' · ' + esc(t.title) + '</h2>' +
+        '<p class="muted small">' + esc(TRIAL_SCOPE[t.scope] || '') + ' · ' + esc((t.sites || []).map(function (x) { return x.city; }).join(' / ') || '中心待定') + '</p></div>' +
+        '<div class="fit ' + BAND[m.band][1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + BAND[m.band][0] + '</em></div></div>' +
+        (t.status === 'suspended' ? '<div class="notice"><b>这条已暂停招募。</b>你收藏之后状态变了，记录仍在；要不要继续等，去门诊问研究护士。</div>' : '') +
+        '<h3 class="h3" style="margin:12px 0 6px">状态与中心变化</h3>' +
+        '<div class="track">' + track.map(function (u) {
+          return '<div class="track-row"><span class="date">' + esc(u.on) + '</span><div><b>' + esc(u.text) + '</b><small>' + esc(u.source) + '</small></div></div>';
+        }).join('') + '</div>' +
+        '<div class="crit-mini">' + (unknown.length ? unknown.map(function (e) { return '<span>? ' + esc(e.text) + '</span>'; }).join('') : '<span>没有待确认项</span>') + '</div>' +
+        '<div class="trial-actions">' +
+          (f.state !== 'asking' ? '<button type="button" class="btn" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="asking">标为准备问</button>' : '') +
+          '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
+          '<button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看条件原文与中心</button>' +
+          (f.state !== 'archived' ? '<button type="button" class="btn btn-quiet" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="archived">归档</button>'
+            : '<button type="button" class="btn btn-quiet" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="watching">回到在跟</button>') +
+          '<button type="button" class="btn btn-quiet" data-act="trial-fav" data-id="' + esc(t.id) + '">取消收藏</button>' +
+        '</div>' +
+        '<p class="small-note">这一节只记"变化本身"，不写"最新情况"，也不预测结果；登记状态，未核实。</p>' +
+        '</section>';
+    }
+
+    return '<div class="notice"><b>收藏 = 跟踪变化。</b>' + TRIAL_TRACK_NOTE + '</div>' +
+      (act.length ? act.map(card).join('') : '<div class="chart-empty"><p>在跟踪的条目为空；已归档的在下面。</p></div>') +
+      (arc.length ? '<details class="bad-trials"><summary>已归档 ' + arc.length + ' 条（记录仍在，可回到在跟）</summary>' + arc.map(card).join('') + '</details>' : '');
   }
 
   function trialDetail(id) {
@@ -1201,9 +1238,19 @@
       case 'pin-clear': state.chart.pin = null; redrawChart(); break;
       case 'trial-fav': {
         var fid = el.getAttribute('data-id');
-        var ix = state.trialFavs.indexOf(fid);
-        if (ix >= 0) { state.trialFavs.splice(ix, 1); toast('已取消收藏'); }
-        else { state.trialFavs.push(fid); toast('已收藏到跟踪（原型为内存态，刷新即还原）'); }
+        var ix = favIndex(fid);
+        if (ix >= 0) { state.trialFavs.splice(ix, 1); toast('已取消收藏（原型为内存态）'); }
+        else { state.trialFavs.push({ id: fid, state: 'watching', savedOn: '2026-10-25', note: '' }); toast('已收藏到跟踪（原型为内存态，刷新即还原）'); }
+        render();
+        break;
+      }
+      case 'trial-state': {
+        var sid = el.getAttribute('data-id'), sstate = el.getAttribute('data-state');
+        var sx = favIndex(sid);
+        if (sx >= 0) {
+          state.trialFavs[sx].state = sstate;
+          toast(sstate === 'asking' ? '已标记「准备问」' : sstate === 'archived' ? '已归档（记录仍在）' : '已回到「在跟」');
+        }
         render();
         break;
       }
@@ -1347,6 +1394,32 @@
       if (ix >= 0) sel.splice(ix, 1);
     }
     redrawChart();
+  });
+
+  /* 临床试验：检索输入（防抖）、筛选下拉、我的偏好 —— 均只改界面状态，不动档案 */
+  var trialQTimer = null;
+  document.addEventListener('input', function (e) {
+    var q = e.target.closest('[data-act="trial-q"]');
+    if (!q) return;
+    state.trialFilter2.q = q.value;
+    clearTimeout(trialQTimer);
+    trialQTimer = setTimeout(function () {
+      render();
+      var box = $('#trial-q');
+      if (box) { box.focus(); try { box.setSelectionRange(box.value.length, box.value.length); } catch (err) { /* 忽略 */ } }
+    }, 220);
+  });
+  document.addEventListener('change', function (e) {
+    var pre = e.target.closest('[data-act="trial-pref"]');
+    if (pre) {
+      var k = pre.getAttribute('data-key');
+      state.trialPrefs[k] = pre.type === 'checkbox' ? pre.checked : pre.value;
+      toast('偏好只影响提示与排序，不改变「符合 / 不符合」的判断');
+      render();
+      return;
+    }
+    var f2 = e.target.closest('[data-act="trial-filter2"]');
+    if (f2) { state.trialFilter2[f2.getAttribute('data-key')] = f2.value; render(); return; }
   });
 
   /* 数字键盘：聚焦数字输入时弹出 */
