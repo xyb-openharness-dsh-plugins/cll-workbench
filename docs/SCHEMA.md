@@ -1,56 +1,46 @@
-# 数据主体—关系—表
+# 数据主体—关系—表（CLL 草案 · G1 包 → G3 冻结）
 
-| 实体 | 稳定 ID | 主体/外键 | 核心字段/类型 | 约束/索引 | 来源/确认 | 生命周期 |
-| --- | --- | --- | --- | --- | --- | --- |
-| subject | ... | ... | ... | ... | ... | ... |
-| document | ... | subject | relative_path/hash/mime | ... | original | ... |
-| observation | ... | subject/metric_definition | time/value/unit | ... | candidate/confirmed | ... |
-| artifact | ... | task/snapshot | relative_path/hash/format | ... | template version | ... |
+状态：**G3 冻结版**（判读列断言已入检查链）。判读红线：**无 diagnosis / risk_level / prognosis / recommendation / severity 类列**（M3 断言，check-schema 执行）。
 
-实体图：...
-扩展策略：定义目录新增 vs 结构迁移的边界；核心关系不塞入任意 JSON。
-迁移 ledger/旧库 fixture/备份/事务/回滚兼容：...
-数据根选择、相对路径校验、公共数据和私人数据分离：...
-统一读模型与跨页一致性验收：...
+## 通用约定（全表适用）
+- 每表 `id INTEGER PRIMARY KEY`、`created_at`/`updated_at` TEXT(ISO8601)、默认读序 `ORDER BY rowid`。
+- **显式 null**：可空列显式 NULL，不用空串。
+- `in_use INTEGER NOT NULL DEFAULT 1` 软删除/更正链；`*_title TEXT` 分节标题列。
+- `author_role TEXT CHECK(author_role IN ('self','caregiver'))` + `visibility TEXT CHECK(visibility IN ('private','normal'))`（三出口过滤依据）。
+- `source_text` 报告/医嘱原文摘录与结构化值并存；`source_doc_id` 关联 `document`。
+- 数值 `value_text`（原文）+ `value_num` + `unit`；不做跨单位换算；**分类值不进趋势**（`series/metric_code` 数值列才进曲线视图）。
+- 三态枚举一律 `CHECK(x IN ('detected','not_detected','not_tested'))`。
 
-## 持久化与记忆选型（互动确认）
+## 表清单（15 张）
 
-等级 A/B/C/D 与理由：...
-预计规模/增长、常用查询、并发写入者、离线要求：...
-SQLite 或 JSON 的实际运行条件与备选方案：...
+| 表 | 核心字段 | 说明 |
+| --- | --- | --- |
+| `subject` | name_text, birth_year, sex, role | 单主体+可挂 caregiver |
+| `document` | relative_path, sha256 UNIQUE, mime, parse_status | 资料根内校验 |
+| `candidate` | doc_id, payload_json, state('pending'/'accepted'/'rejected') | AI/解析候选；拒收零副作用 |
+| `dx_profile` | dx_date, dx_name_text('CLL'/'SLL'/'MBL' 照抄), binet_stage_text, rai_stage_text, stage_source_text, stage_scheme('Binet1977'/'Rai1975' 照抄来源) | 双分期**分列照抄**，不换算不判进展 |
+| `criteria_check` | criteria_code('T3-1'…'T3-8'), criteria_text, ask_flag INTEGER, source_version | 触发词表八条照抄；只存"我想问的"，**无"是否满足"列** |
+| `lab_result` | draw_date, series CHECK('hematology','biochem','molecular','physical'), metric_code, metric_title, value_num, value_text, unit, ref_range_text, lab_name | ★四系列分系列指标卡数据源；ref_range 只显报告单区间 |
+| `ldt_note` | computed_flag INTEGER, window_days INTEGER, note_text | LDT 只存计算窗口参数与备注，**结论不落库** |
+| `gene_result` | gene_code('del17p','del11q','trisomy12','del13q','TP53','IGHV','complex_karyotype'), state 三态, result_text, report_date, lab_name | 基因预后档案；三档匹配输入端 |
+| `mrd_result` | test_date, method('flow','ngs'), value_text, sensitivity_text(如 10⁻⁴–10⁻⁶), source_text | MRD 照抄 + 词表卡；无缓解判读列 |
+| `med_drug` | drug_name, generic_name, class_code('BTKi','BCL2i','anti_CD20','chemo_immuno'), dose_text, frequency('daily','qod','intermittent'), route | 药名词表按 2025 指南分组；不排序 |
+| `med_period` | drug_id, start_date, end_date, change_kind('start','switch','dose','hold','resume'), reason_text, reason_doc_id | 处方变更线；只新增版本 |
+| `med_log` | date, drug_id, state('taken','missed','partial'), note_text | 每日打卡；漏服不评判 |
+| `ae_event` | onset_date, term_text(人话词), drug_id, note_text, source_type | 副作用按药归属；无 severity 列 |
+| `comorbidity` | cirs_system_code, entry_text, source_type('clinician_note','self') | CIRS 条目照抄；无相互作用列 |
+| `comorbidity_med` | name_text, dose_text, purpose_text, start_date | 在用药清单 |
+| `question_list` | topic_code, question_text, source_version, visibility DEFAULT 'private' | 问题清单（含就诊要问）；零处置 |
+| `visit_prep` | visit_date, facts_md, questions_md, exported_at | 事实区/问题区分列导出 |
+| `guideline_ref` | key, url, version, fetched_at, level('A','B','C','D') | 词表与事实卡来源可追溯 |
+| `settings` | key, value_json | 资料根、凭据状态（不存明文）、面板宽度偏好 |
 
-| 数据类别 | 权威位置/格式 | 读写责任 | 来源/revision | 索引/失效/保留规则 |
-| --- | --- | --- | --- | --- |
-| 已确认业务事实 | ... | ... | ... | ... |
-| 文件与产物 | ... | ... | ... | ... |
-| 偏好/摘要/检索记忆（可选） | ... | ... | ... | ... |
-| 可重建内存缓存/派生索引 | ... | ... | ... | ... |
+（19 张含 `ldt_note`/`comorbidity_med`；实际建表数以 freeze-contract 为准。）
 
-同步：提交后更新、幂等键、重试、积压可见性：...
-检索：主体/工作区过滤、来源核对、过期与冲突处理：...
-纠正/删除：缓存与记忆失效、删除传播：...
-外部记忆的实际 API/版本/部署/发送范围；不可用时的本地路径：...
-性能证据：代表数据、查询延迟/启动、内存测量与目标：...
-确认人/日期、未决项及对应验收 ID：...
+实体图：`subject 1—n document`；`document 1—n candidate`；`lab_result/gene_result/mrd_result/med_period/ae_event 1—1 source_doc?`；`med_drug 1—n med_period/med_log/ae_event`。
 
-## 前端与业务流程变化矩阵（建库前必填）
-
-领域事实/关系、工作流定义与实例、页面读模型/偏好边界：...
-稳定ID/revision、流程定义版本/已有实例、状态转换与跳过/重开/取消语义：...
-
-| 变化情境 | 不变的事实/关系 | 配置/投影/API变化 | 迁移/旧记录读取与恢复 | 验收证据 |
-| --- | --- | --- | --- | --- |
-| 改导航/布局/同一事实多视图 | ... | ... | ... | ... |
-| 新字段/指标/可选记录类型 | ... | ... | ... | ... |
-| 步骤插入/跳过/重开/并行 | ... | ... | ... | ... |
-| 来源更正/删除/摘要与缓存失效 | ... | ... | ... | ... |
-| 旧数据库/旧API客户端升级 | ... | ... | ... | ... |
-
-不把UI模拟数据当表，不为每个步骤复制事实；不通过无限JSON、重置库或无理由的全量事件溯源代替设计。详见docs/14-HTML-AND-DATA-CONTRACT.md。
-
-
-## UI/流程变化的承受能力（必填）
-
-领域实体/证据/主体/状态/版本是稳定核心；UI通过命令用例写入和版本化读模型读取。不能按Tab复制事实或把整页state当业务存储。列出：页面拆合/移位、流程先后改变、新增普通指标、来源更正、候选→接受、未知字段/枚举、隐私派生与快照失效时需要改哪层、是否迁移、兼容/恢复方式。
-
-HTML确认前是候选模型/模拟adapter，确认对应模块后复核并落实生产schema/API；仅布局/字段顺序变化不能迫使用户清库。JSON扩展有类型/schema/version/上限，核心关系保留外键与约束；写入有revision/幂等/事务。记录真实迁移/并发/故障证据，未执行标未验证。
+## 迁移与冻结（G3 已执行）
+- `schema/0001_initial.sql` 一次成文 → `schema/freeze-contract.md` 记 sha256；此后**只增不改**（0002+ 走 ALTER/新表）。
+- 迁移前备份 `workbench.db.bak-<ts>`；失败回滚留日志。
+- 断言（`node scripts/check-schema.mjs`，串入 check 链）：sha256 一致、表清单一致、判读列禁词（diagnosis|risk_level|prognosis|recommendation|severity）在全部 `PRAGMA table_info` 中 0 命中、全部 00*.sql 可在 :memory: 顺序建库。
+- 读模型：各页只读 `v_metric_trend`（数值列白名单：value_num 且 metric_code 在数值目录内）、`v_*` 视图，不在页面层拼 SQL。
