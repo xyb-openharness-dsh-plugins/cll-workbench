@@ -42,3 +42,16 @@ Logo 来源与使用限制见 assets/README.md。许可证、作者、仓库/发
 ## HTML先行与数据演进
 
 业务开发前先交付HTML交互工作台原型、实际预览并由用户确认版本/hash和范围。数据设计先区分领域事实、流程状态和页面读模型，走查前端/流程变化、兼容与迁移；原型对象不直接作为表。见[规范](docs/14-HTML-AND-DATA-CONTRACT.md)。
+
+## 原型实渲截图（v0.1 · 2026-10-25，1280×900 浅色，演示数据）
+
+| 截图 | 回答什么 |
+| --- | --- |
+| ![看板](docs/screenshots/proto-dash.png) | 看板——"我现在该做什么"：W&W 速览、今日打卡、各功能线入口逐字对齐交互合同 |
+| ![指标检测](docs/screenshots/proto-labs.png) | 分系列指标卡——血象/生化/分子/体格四系列有序分组，正面当前值+语境栏 |
+| ![指标卡翻转](docs/screenshots/proto-labs-flip.png) | 3D 反转看背面——系列说明/单位/参考区间来源/历史摘要 |
+| ![一图秀](docs/screenshots/proto-onechart.png) | 病情一图秀——叠看 1–4 条指标线，治疗条独立层 |
+| ![指标选择窗口](docs/screenshots/proto-onechart-picker.png) | 指标选择窗口——按系列分组勾选（≤4），选满有明确提示 |
+| ![治疗折叠-收](docs/screenshots/proto-med-folded.png) | 治疗线折叠卡（收态）——32 号模版，默认收起 |
+| ![治疗折叠-展](docs/screenshots/proto-med-open.png) | 治疗线折叠卡（展态）——计划/实际分列 + 处方变更分段 |
+| ![三档匹配](docs/screenshots/proto-trial-match.png) | 临床研究三档匹配——匹配指数只算字段重合度（如 5/7），无推荐排序；private 三出口打码 |
