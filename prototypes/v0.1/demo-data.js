@@ -168,6 +168,63 @@
     { id: 'T-10', title: 'TP53 突变 CLL 新药研究（演示虚构，规则待确认）', tier: 'pending', fields: { 年龄: '≥18', 诊断: 'CLL', 'del(17p)/TP53': '需要 TP53 检出', IGHV: '任意', '既往 BTKi': '任意', '基线血象': '记录即可', '体能状态': 'ECOG 0–2' } }
   ];
   /* 患者档案字段（匹配输入端；三态照抄） */
+  /* 登记条件规则（演示用：text=登记原文摘录，field=对应入组档案字段，op=求值算子）
+     op: ge=数值≥, eq=等值, absent=「未用过/无既往」类，check(mine) 为真表示冲突。
+     tier:'pending' 的条目进「待确认规则」，不进三档统计。 */
+  var TRIAL_RULES = [
+    [ /* T-01 一线 BTKi 对比 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '经病理/免疫表型确诊 CLL/SLL', field: '诊断名（照抄）', op: 'eq', value: 'CLL（2024-11-12 报告原文）' },
+      { text: '既往未接受过 BTKi 治疗（登记原文）', field: '既往 BTKi 用药', op: 'absent', check: function (v) { return /在用|用过/.test(v); } },
+      { text: 'ECOG 0–2', field: 'ECOG 体能状态' },
+      { text: '试验期间需采取有效避孕措施（登记原文未结构化）', tier: 'pending' }
+    ],
+    [ /* T-02 del(17p) 队列 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: 'del(17p) 阳性（FISH 检出）', field: 'del(17p)（FISH）', op: 'eq', value: '检出' },
+      { text: '既往 BTKi 治疗失败或不耐受', field: '既往 BTKi 后疾病状态（复发/难治？）' }
+    ],
+    [ /* T-03 非共价 BTKi */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '既往接受过共价 BTKi 治疗后进展', field: '既往 BTKi 后疾病状态（复发/难治？）' },
+      { text: 'ECOG 0–2', field: 'ECOG 体能状态' }
+    ],
+    [ /* T-04 有限疗程双药 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '既往未经治疗（treatment-naive）', field: '治疗线数', op: 'absent', check: function (v) { return /^\d+ 线/.test(v) && !/^0/.test(v); } },
+      { text: 'TP53 状态需已知（用于分层）', field: 'TP53 突变' },
+      { text: 'IGHV 状态需已知（用于分层）', field: 'IGHV 突变状态' }
+    ],
+    [ /* T-05 长期随访登记研究 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '确诊 CLL 或 SLL（含观察等待期）', field: '诊断名（照抄）', op: 'eq', value: 'CLL（2024-11-12 报告原文）' },
+      { text: '能按约定完成年度随访', field: '（无对应记录）' }
+    ],
+    [ /* T-06 BCL-2i 联合 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '复发/难治 CLL（登记原文）', field: '既往 BTKi 后疾病状态（复发/难治？）' },
+      { text: '既往 BTKi 暴露', field: '既往 BTKi 用药', op: 'absent', check: function (v) { return !/在用|用过/.test(v); } }
+    ],
+    [ /* T-07 老年虚弱人群 */
+      { text: '年龄 ≥65 岁或不合条件化疗', field: '年龄', op: 'ge', value: 65 },
+      { text: 'ECOG 0–2', field: 'ECOG 体能状态' },
+      { text: '肝肾功能在参考范围内（登记原文）', field: '（无对应记录）' }
+    ],
+    [ /* T-08 MRD 导向停药研究 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '已达深度缓解（uMRD）', field: '（无对应记录）' },
+      { text: 'TP53 状态需已知', field: 'TP53 突变' }
+    ],
+    [ /* T-09 真实世界研究 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '正在接受或曾接受 BTKi 治疗', field: '既往 BTKi 用药', op: 'absent', check: function (v) { return !/在用|用过/.test(v); } }
+    ],
+    [ /* T-10 生物标志物观察 */
+      { text: '年龄 ≥18 岁', field: '年龄', op: 'ge', value: 18 },
+      { text: '同意采集外周血样本', field: '（无对应记录）' },
+      { text: 'del(11q) 或 +12 状态记录完整', field: 'IGHV 突变状态' }
+    ]
+  ];
   var matchProfile = {
     '年龄': '63',
     '诊断': 'CLL',
@@ -235,7 +292,7 @@
         ['登记研究', 'ictrp'], ['II', 'chinadrugtrials'], ['III', 'ictrp'], ['I/II', 'chinadrugtrials'],
         ['III', 'ictrp'], ['II', 'chinadrugtrials']
       ][i] || ['—', 'chinadrugtrials'];
-      return Object.assign({}, t, { phase: meta[0], source: meta[1] });
+      return Object.assign({}, t, { phase: meta[0], source: meta[1], rules: TRIAL_RULES[i] || [] });
     }), matchProfile: matchProfile, docs: docs, pendingCandidate: pendingCandidate,
     mood: mood, mrdVocab: mrdVocab, geneVocab: geneVocab,
     SERIES_ORDER: SERIES_ORDER, seriesNote: seriesNote
@@ -254,3 +311,12 @@ window.LYMPAL_DEMO.matchSource = {
 window.LYMPAL_DEMO.trialSnapshot = '2026-10-25';
 window.LYMPAL_DEMO.docsCount = 6;
 window.LYMPAL_DEMO.comorb = window.LYMPAL_DEMO.comorb || [];
+
+/* 三档比对元信息（35 号 §三：结果必须带口径版本与档案修订号） */
+window.LYMPAL_DEMO.matchMeta = {
+  ruleSet: 'cll-match-rules-20261025',
+  profileRev: 'rev-20261025-1',
+  footerNote: '三档只说明记录与登记条件的比对结果；入组判断属于医生与研究中心。'
+};
+window.LYMPAL_DEMO.trialSourceLabel = '中国药物临床试验登记平台（chinadrugtrials）+ ICTRP';
+window.LYMPAL_DEMO.trialLibraryCount = 461;

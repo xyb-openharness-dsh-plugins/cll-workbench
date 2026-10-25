@@ -447,3 +447,28 @@ dialog.modal::backdrop{background:rgba(44,42,58,.35); backdrop-filter:blur(2px)}
   .chart-legend-note{font-size:11.5px}
   .lg-item{padding:3px 7px; font-size:11.5px}
 }
+
+/* ---------- 临床研究三档（现实形态：可能冲突最优先，中性色不用红绿排名） ---------- */
+.tier-group{margin:10px 0 12px}
+.tier-head{display:flex; align-items:center; gap:6px; margin:0 0 6px; font-size:13px; font-weight:600}
+.tier-head.warn{color:var(--warn)}
+.tier-head.grey{color:var(--grey)}
+.tier-head.ok{color:var(--ok)}
+.tier-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
+.tier-list li{
+  padding:8px 10px; border:1px solid var(--line); border-radius:10px;
+  background:var(--surface); font-size:12.5px; line-height:1.5;
+}
+.tier-list li b{display:block; color:var(--ink); font-weight:600}
+.tier-mine{display:block; margin-top:3px; color:var(--muted); font-size:12px}
+.miss-tag{display:inline-block; padding:1px 7px; border-radius:999px; background:var(--grey-bg); color:var(--grey); font-size:11.5px}
+.tier-chips{display:inline-flex; gap:5px; margin-left:auto}
+.tchip{display:inline-flex; align-items:center; gap:2px; padding:1px 7px; border-radius:999px; font-size:11.5px; font-variant-numeric:tabular-nums}
+.tchip.warn{background:var(--warn-bg); color:var(--warn)}
+.tchip.grey{background:var(--grey-bg); color:var(--grey)}
+.tchip.ok{background:var(--ok-bg); color:var(--ok)}
+.tchip.pending{background:var(--brand-soft); color:var(--brand-deep)}
+.trial-fold summary{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.trial-item{padding:10px 0; border-bottom:1px solid var(--line)}
+.trial-item:last-child{border-bottom:0}
+.trial-item h3{margin:0 0 3px}

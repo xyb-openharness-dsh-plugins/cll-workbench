@@ -34,6 +34,25 @@
 
 > 留痕：小肝宝（liver-cancer-workbench）本机无克隆；远端 v0.1 原型明确「不排序、不匹配」，SPEC 亦写「不做试验匹配与排序」，与 35 号一致。故以 **starter 35 号契约**为准实现，未凭记忆复刻小肝宝截图。
 
+### 1.3 用户 2026-10-25 第三批要求（临床研究现实形态，来源：用户原话）
+> 「临床研究的现实，参考 mac:///Users/qinxiaoqiang/Downloads/biliary-tract-workbench/prototypes/v0.2/index.html」
+
+**取证结果（先做，不猜）**：该路径在本机不存在（`/Users/qinxiaoqiang/...` 属另一台机器；全盘 `find` 无 biliary 原型；
+组织仓库无 biliary-tract-workbench；Issue #18 记录仅到"下一步：HTML demo"，远端仓待建）。**未凭记忆复刻其样式**。
+
+**采用口径**：脚手架 `docs/35-TRIAL-MATCHING.md` + 家族最完整实现 `gtn-workbench prototypes/v0.7`（三档求值 + 待确认规则）。
+
+| 现实要素 | 实现 | 验收证据 |
+| --- | --- | --- |
+| 三档必须是 satisfied/conflict/undetermined | `evalTrial()` 确定性求值：ge/eq/absent 三种算子 | 实测 T-01：已满足 2 · 可能冲突 1 · 无法判定 1 · 待确认 1 |
+| **「可能冲突」独立成档**（上一版缺失） | "既往未接受过 BTKi" vs "在用泽布替尼" → ⚠️ 可能冲突 | 截图 proto-trial-match.png 首卡 |
+| 待确认规则不计入三档 | `tier:'pending'` 单列「⏳ 待确认规则」 | 实测 pending 徽章存在 |
+| 入组档案只读、给来源、缺失判无法判定 | 11 字段表 + 完整度 7/11 + `未记录 → 无法判定` 标记 | 实测 `.miss-tag` 4 处 |
+| 检索双通道 + 外部通道如实 | 自带库（快照+461 条）/ AI 只起草 / 脚本需终端 | 页面「检索双通道」表 |
+| 登记摘录按来源筛选、空态 | chips 三档筛选 + 空态文案 | 实测 trial-filter 交互 |
+| 卡脚固定句 | 入组判断属医生与研究中心 / 登记号 / 不按匹配度排序 / 口径版本+档案修订 | 每卡末两行 |
+| 禁用匹配度百分比与择优措辞 | 全文无「匹配指数/匹配度 N」；不排序 | `grep` 0 命中 |
+
 ## 二、家族硬纪律（摘录，全文见 AGENTS.md / docs 编号文档）
 不修绿；✅实测/🔧骨架/⏳未实现三态如实；数据层 ORDER BY rowid、显式 null、in_use、分节 *_title、分类不进趋势；前端页脚贴底、[hidden]、字号 12.5–15、面板 25–45% 可拖可收、无判读列、private 三出口代码级过滤；改包必升版；public 与原型逐字符对齐；BACKLOG 改前先 pull。
 

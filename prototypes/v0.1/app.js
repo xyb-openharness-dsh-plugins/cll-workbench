@@ -57,6 +57,7 @@
     sessionOpen: true,           /* AI 对话栏开合（收起只隐藏，不结束会话） */
     agentWidth: 0.35,            /* 会话列宽（25%–45%，默认 35%） */
     onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
+    trialFilter: 'all',          /* 登记摘录来源筛选 */
     kbTarget: null,              /* 数字键盘组件目标输入 */
     extra: { cbc: [], questions: D.questions.slice(), checked: [] } /* 本机写入（演示内存态） */
   };
@@ -497,7 +498,7 @@
       entryCard('副作用', entryBtn('go-ae', '记一次不舒服', true),
         '最近一条：' + esc(D.ae[0].d + ' ' + D.ae[0].term) + '（词表按当前用药过滤）') +
       entryCard('一图秀', entryBtn('go-onechart', '病情一图秀（选几条线叠看）', true), '叠看 1–4 条指标线，只重绘图区。') +
-      entryCard('临床试验', entryBtn('go-trial-match', '帮我匹配', true), '三档判定 + 匹配指数（只算字段重合度）。') +
+      entryCard('临床试验', entryBtn('go-trial-match', '帮我匹配', true), '三档比对（已满足／可能冲突／无法判定）+ 证据链，无匹配度。') +
       entryCard('复诊准备', entryBtn('go-prep', '准备复诊', true), '选区间、勾线、生成资料包与问题清单。') +
       entryCard('基因档案', entryBtn('go-gene', '补一条基因结果', true), 'FISH/TP53/IGHV 三态档案。') +
       entryCard('MRD', entryBtn('go-mrd', '记一次 MRD 结果', true), '流式/NGS 原文照抄 + 里程碑轨道。') +
@@ -748,94 +749,149 @@
 
   /* ---- 临床研究 trial / trial/match ---- */
   function trialTierName(t) { return { local: '本地库命中', external: '外部工具线索', pending: '待确认规则' }[t.tier]; }
-  /* 35 号分层匹配（替代匹配指数）：结构化命中 / 文本命中 / 宽口径命中 + 证据链 + 三态
-     - 禁止数值综合分；禁止"适合你/能入组"；缺字段判「无法自动匹配」，不判「不适用」。 */
-  var WIDE_TERMS = /实体瘤|淋巴增殖性疾病|血液肿瘤|任意|均可|不限/;
+  /* 临床研究（现实形态，35 号三档 + GTN v0.7 参照）
+     三档：已满足 satisfied / 可能冲突 conflict / 无法判定 undetermined；待确认规则 pending 单列不计入三档。
+     规则求值是确定性求值（同档案 + 同规则版本 = 同结果），不调用模型；缺失永远流向「无法判定」；
+     排序按来源顺序，不按匹配度；禁用百分比与任何"更适合/建议参加"措辞。 */
+  var TIER = {
+    conflict: { label: '可能冲突', mark: '⚠️', cls: 'warn' },
+    undetermined: { label: '无法判定', mark: '❓', cls: 'grey' },
+    satisfied: { label: '已满足', mark: '✅', cls: 'ok' }
+  };
+  var TIER_ORDER = ['conflict', 'undetermined', 'satisfied'];
 
-  function matchTrial(t) {
-    var P = D.matchProfile;
-    var structured = [], text = [], wide = [], cannot = [], evidence = [];
-    Object.keys(t.fields).forEach(function (k) {
-      var req = t.fields[k], have = P[k] || '未记录';
-      var missing = /未测|未记录|未查/.test(have);
-      if (missing) { cannot.push({ field: k, req: req, have: have, why: '本地未建档「' + k + '」' }); return; }
-      if (WIDE_TERMS.test(req)) { wide.push({ field: k, req: req, have: have }); return; }
-      var hitStruct = false;
-      if (req === have) hitStruct = true;
-      else if ((req === '用过' || req === '在用（泽布替尼）') && /在用|用过/.test(have)) hitStruct = true;
-      else if (/^≥(\d+)/.test(req)) { var n = parseInt(req.match(/^≥(\d+)/)[1], 10); if (parseInt(have, 10) >= n) hitStruct = true; }
-      else if (/^ECOG/.test(req) && /^\d/.test(have)) hitStruct = true;
-      if (hitStruct) structured.push({ field: k, req: req, have: have });
-      else text.push({ field: k, req: req, have: have });
+  /* 入组档案（只读，不重复录入；缺失不阻断匹配，但对应条件判「无法判定」） */
+  function matchProfileFields() {
+    var c = cbcAll(), last = c[c.length - 1] || {};
+    var btki = (D.rxChanges || []).filter(function (m) { return /泽布|BTKi|伊布/.test((m.drug || '') + (m.text || '')); });
+    var age = 2026 - 1963;
+    return [
+      { k: '年龄', v: age + ' 岁', src: '病情整理 · 出生年 1963（自算，仅展示）' },
+      { k: '诊断名（照抄）', v: 'CLL（2024-11-12 报告原文）', src: '病情整理 · 诊断档案' },
+      { k: 'Binet / Rai 分期（照抄）', v: 'A（照抄）/ 0 期（照抄）', src: '病情整理 · 分期双轨' },
+      { k: 'del(17p)（FISH）', v: '未检出（2024-11-15 报告原文）', src: '基因与预后档案' },
+      { k: 'TP53 突变', v: null, src: '基因与预后档案（未测）' },
+      { k: 'IGHV 突变状态', v: null, src: '基因与预后档案（未测）' },
+      { k: '既往 BTKi 用药', v: btki.length ? '在用泽布替尼（2026-06-01 起，医嘱原文）' : '无记录', src: '口服药与治疗 · 处方变更' },
+      { k: '治疗线数', v: '1 线（BTKi 持续治疗中）', src: '口服药与治疗' },
+      { k: '最近血象（WBC/ALC/Plt/Hb）', v: last.d ? 'WBC ' + last.wbc + ' / ALC ' + last.alc + ' / Plt ' + last.plt + ' / Hb ' + last.hgb + '（' + last.d + '）' : null, src: '指标检测 · 血常规' },
+      { k: 'ECOG 体能状态', v: null, src: '（无对应记录）' },
+      { k: '既往 BTKi 后疾病状态（复发/难治？）', v: null, src: '（无对应记录）' }
+    ];
+  }
+
+  /* 三档求值：把「登记条件」与「我的记录」逐条比对（确定性规则） */
+  function evalTrial(t) {
+    var P = {}; matchProfileFields().forEach(function (f) { P[f.k] = f; });
+    var rules = [], pending = [];
+    (t.rules || []).forEach(function (r) {
+      var mine = null, src = '（无对应记录）';
+      var f = P[r.field];
+      if (f && f.v) { mine = f.v; src = f.src; }
+      if (r.tier === 'pending') { pending.push(r.text); return; }
+      var tier;
+      if (r.missing_key || !f || !f.v) tier = 'undetermined';
+      else if (r.op === 'ge') tier = parseInt(mine, 10) >= r.value ? 'satisfied' : 'conflict';
+      else if (r.op === 'eq') tier = mine === r.value ? 'satisfied' : 'conflict';
+      else if (r.op === 'absent') tier = (r.check && r.check(mine)) ? 'conflict' : 'satisfied';
+      else tier = 'undetermined';
+      rules.push({ text: r.text, tier: tier, mine: mine || '未记录', src: src });
     });
-    /* 每类命中都带证据：试验要求原文 + 我的建档值 + 来源 */
-    function evRows(list) {
-      return list.map(function (x) {
-        return '<tr><td>' + esc(x.field) + '</td><td><q>' + esc(x.req) + '</q></td><td>' + esc(x.have) + '</td><td class="muted">' + esc(D.matchSource[x.field] || '档案') + '</td></tr>';
-      }).join('');
-    }
-    var tier = structured.length ? 'structured' : text.length ? 'text' : wide.length ? 'wide' : 'none';
-    return {
-      tier: tier, structured: structured, text: text, wide: wide, cannot: cannot,
-      evStruct: evRows(structured), evText: evRows(text), evWide: evRows(wide),
-      cannotRows: cannot.map(function (c) {
-        return '<tr><td>' + esc(c.field) + '</td><td><q>' + esc(c.req) + '</q></td><td>' + esc(c.have) + '</td><td class="muted">' + esc(c.why) + '</td></tr>';
-      }).join('')
-    };
+    var by = { conflict: [], undetermined: [], satisfied: [] };
+    rules.forEach(function (r) { by[r.tier].push(r); });
+    return { recordId: t.id, title: t.title, source: t.source, phase: t.phase, by: by, pending: pending, rules: rules };
   }
-  function tierBadge(tier) {
-    return { structured: badge('结构化命中', 'ok'), text: badge('文本命中', 'warn'), wide: badge('宽口径命中', 'grey'), none: badge('无命中', 'grey') }[tier];
+  function trialRows(e) {
+    return TIER_ORDER.map(function (tier) {
+      var list = e.by[tier];
+      if (!list.length) return '';
+      return '<div class="tier-group"><h4 class="tier-head ' + TIER[tier].cls + '">' + TIER[tier].mark + ' ' + TIER[tier].label +
+        '（' + list.length + '）</h4><ul class="tier-list">' + list.map(function (r) {
+          return '<li><b>' + esc(r.text) + '</b><span class="tier-mine">你的记录：' + esc(r.mine) + ' · 来源：' + esc(r.src) + '</span></li>';
+        }).join('') + '</ul></div>';
+    }).join('');
   }
-  function tierLabel(tier) {
-    return { structured: '结构化命中', text: '文本命中', wide: '宽口径命中', none: '无命中' }[tier];
+  function trialCard(e) {
+    var sum = '已满足 ' + e.by.satisfied.length + ' 项 · 可能冲突 ' + e.by.conflict.length + ' 项 · 无法判定 ' + e.by.undetermined.length + ' 项' +
+      (e.pending.length ? ' · 待确认规则 ' + e.pending.length + ' 项' : '');
+    var chips = '<span class="tier-chips">' +
+      (e.by.conflict.length ? '<span class="tchip warn">⚠️ ' + e.by.conflict.length + '</span>' : '') +
+      (e.by.undetermined.length ? '<span class="tchip grey">❓ ' + e.by.undetermined.length + '</span>' : '') +
+      (e.by.satisfied.length ? '<span class="tchip ok">✅ ' + e.by.satisfied.length + '</span>' : '') +
+      (e.pending.length ? '<span class="tchip pending">⏳ ' + e.pending.length + '</span>' : '') + '</span>';
+    return '<details class="trial-fold"><summary><b>' + esc(e.recordId) + '</b> ' + esc(e.title) +
+      ' <span class="muted">' + esc(e.phase) + ' · ' + esc(e.source) + '</span>' + chips + '</summary>' +
+      '<p class="muted small">' + esc(sum) + '（汇总只计数，不给匹配度）</p>' +
+      trialRows(e) +
+      (e.pending.length ? '<div class="tier-group"><h4 class="tier-head grey">⏳ 待确认规则（不进三档统计）</h4><ul class="tier-list">' +
+        e.pending.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></div>' : '') +
+      '<p class="muted small">三档只说明记录与登记条件的比对结果；入组判断属于医生与研究中心。登记状态，未核实。</p>' +
+      '<p class="muted small">登记号 ' + esc(e.recordId) + ' · 排序按来源顺序，不按匹配度 · 评估口径 ' + esc(D.matchMeta.ruleSet) + ' · 档案 ' + esc(D.matchMeta.profileRev) + '</p>' +
+      '</details>';
   }
 
   function pageTrial() {
     var sub = state.route.sub || 'list';
-    var head = pageHead('临床研究', '分层线索与证据链',
-      '产出的是带证据的检索线索，不是入组结论（脚手架 35 号）：结构化/文本/宽口径三层命中 + 证据链 + 三态；不给数值适配度、不排序、不推荐。', backHome());
-    var nav = subnav('trial', [['研究列表', 'list'], ['匹配', 'match']]);
-    var srcNote = '<p class="muted small">来源通道：本地快照（snapshotDate ' + esc(D.trialSnapshot) + '）+ 在线通道（ICT RP / 药物临床试验登记平台）。' +
-      'FAILED 的来源不算「查过」，见列表页终态列。登记 ≠ 有效 ≠ 安全 ≠ 可入组。</p>';
+    var head = pageHead('临床研究', '登记摘录与三档比对',
+      '这里是登记摘录，不是招募推荐：三档只说明「你的记录」与「登记条件」的比对结果；不给匹配度、不排序、不替你挑选。', backHome());
+    var nav = subnav('trial', [['登记摘录', 'list'], ['三档比对', 'match']]);
+    var fields = matchProfileFields();
+    var missing = fields.filter(function (f) { return !f.v; });
+    var sourceNote = '<p class="muted small">来源：中国药物临床试验登记平台（chinadrugtrials）+ ICTRP · 快照 ' + esc(D.trialSnapshot) +
+      ' · 登记 ≠ 有效 ≠ 可入组；状态一律「登记状态，未核实」。</p>';
     var body;
+
     if (sub === 'match') {
-      var pk = Object.keys(D.matchProfile);
-      var full = pk.filter(function (k) { return !/未测|未记录|未查/.test(D.matchProfile[k]); }).length;
-      var scored = D.trials.map(function (t) { return { t: t, m: matchTrial(t) }; });
-      /* 排序只按命中层级（结构→文本→宽口径），同层按快照顺序；不是"匹配度"排序 */
-      var rank = { structured: 0, text: 1, wide: 2, none: 3 };
-      scored.sort(function (a, b) { return rank[a.m.tier] - rank[b.m.tier]; });
-      var counts = { structured: 0, text: 0, wide: 0, none: 0 };
-      scored.forEach(function (x) { counts[x.m.tier]++; });
-      body = '<section class="card"><div class="card-head"><h2 class="h2">分层线索（' + D.trials.length + ' 条快照）</h2>' + badge('35 号：无综合分') + '</div>' +
-        '<p class="muted">建档完整度 <b>' + full + '/' + pk.length + '</b>（只有已确认入库字段参与匹配）。本页统计：结构化 ' + counts.structured + ' · 文本 ' + counts.text + ' · 宽口径 ' + counts.wide + ' · 无命中 ' + counts.none + '。层内按快照顺序，不按"匹配度"。</p>' +
-        '<div class="row">' + aiBtn('基于我的已确认建档字段，帮我整理每条试验的命中证据与「要问研究团队的问题」清单（不要判断我是否够格或建议参加）', 'AI 协助整理命中证据') + '</div>' +
-        srcNote +
-        scored.map(function (x) {
-          var t = x.t, m = x.m;
-          var sec = '';
-          if (m.structured.length) sec += '<h4 class="h3">结构化命中（' + m.structured.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evStruct + '</tbody></table>';
-          if (m.text.length) sec += '<h4 class="h3">文本命中（' + m.text.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evText + '</tbody></table>';
-          if (m.wide.length) sec += '<h4 class="h3">宽口径命中（' + m.wide.length + '，排在本层末尾）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文（宽口）</th><th>我的建档值</th><th>建档来源</th></tr></thead><tbody>' + m.evWide + '</tbody></table>';
-          if (m.cannot.length) sec += '<h4 class="h3">无法自动匹配（' + m.cannot.length + '）</h4><table class="match-tbl"><thead><tr><th>字段</th><th>条件原文</th><th>我的建档值</th><th>原因</th></tr></thead><tbody>' + m.cannotRows + '</tbody></table>';
-          if (!sec) sec = '<p class="muted">本条未命中任何层；缺字段条目见「无法自动匹配」。</p>';
-          return '<details class="trial-fold"><summary><b>' + esc(t.id) + '</b> ' + esc(t.title) + ' · ' + tierBadge(m.tier) +
-            ' · <span class="muted">' + esc(t.phase || '') + ' · ' + esc(t.source) + '</span></summary>' +
-            sec +
-            '<p class="muted small">来源：' + esc(t.source) + '（终态 SUCCESS）· 快照 ' + esc(D.trialSnapshot) + ' · 登记状态，未核实。是否适合、能否入组由研究团队按方案评估；本表不给结论。</p></details>';
-        }).join('') +
-        '<div class="row"><button type="button" class="btn" data-act="export-trial">导出命中证据（private 打码）</button>' +
+      var evals = D.trials.map(evalTrial);
+      body = '<section class="card"><div class="card-head"><h2 class="h2">入组档案（只读，不重复录入）</h2>' +
+        '<span class="muted small">完整度 ' + (fields.length - missing.length) + '/' + fields.length + '</span></div>' +
+        '<div class="notice">缺失不阻断比对，但对应条件会判「无法判定」' +
+          (missing.length ? '；当前缺失：' + missing.map(function (f) { return esc(f.k); }).join(' · ') : '') + '。</div>' +
+        '<div class="table-wrap"><table class="match-tbl"><thead><tr><th>字段</th><th>我的记录</th><th>来源</th></tr></thead><tbody>' +
+        fields.map(function (f) {
+          return '<tr><td>' + esc(f.k) + '</td><td>' + (f.v ? esc(f.v) : '<span class="miss-tag">未记录 → 无法判定</span>') + '</td><td class="muted">' + esc(f.src) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<p class="muted small">年龄 / 分期 / 基因 / 用药等都在各自业务页维护，这里只读；补充请回对应页面录入。</p></section>' +
+        '<section class="card"><div class="card-head"><h2 class="h2">检索双通道</h2>' + badge('AI 只起草不代发') + '</div>' +
+        '<div class="table-wrap"><table><tbody>' +
+        '<tr><td>① 自带库</td><td>' + esc(D.trialSourceLabel) + ' · 快照 ' + esc(D.trialSnapshot) + ' · 库内 ' + esc(D.trialLibraryCount) + ' 条；本页演示 ' + D.trials.length + ' 条</td></tr>' +
+        '<tr><td>② AI 协助比对</td><td>把入组档案摘要与登记条目预写进提示词（cll:agent-draft：只填输入框，不自动发送）' +
+          aiBtn(matchPrompt(), 'AI 协助比对') + '</td></tr>' +
+        '<tr><td>外部通道</td><td>脚本 fetch-cll-trials-2026（需在终端手动运行，本页不代跑）· 在线通道终态如实透传：FAILED/无覆盖 ≠ 查过</td></tr>' +
+        '</tbody></table></div></section>' +
+        '<section class="card"><div class="card-head"><h2 class="h2">三档比对结果（' + evals.length + ' 条）</h2>' + badge('无匹配度 · 不排序') + '</div>' +
+        '<div class="notice">每张卡按「已满足 / 可能冲突 / 无法判定」计数并逐条给出「你的记录」与来源；待确认规则单列、不进三档统计。' +
+          D.matchMeta.footerNote + '</div>' +
+        evals.map(trialCard).join('') +
+        '<div class="row"><button type="button" class="btn" data-act="export-trial">导出比对结果（private 打码）</button>' +
         '<pre class="agent-log" id="trialExport" hidden></pre></div></section>';
     } else {
-      body = '<section class="card"><div class="card-head"><h2 class="h2">研究列表（本地快照 ' + esc(D.trialSnapshot) + '）</h2>' + badge('M4 已落库 461 条') + '</div>' +
-        '<div class="table-wrap"><table><thead><tr><th>编号</th><th>标题</th><th>层</th><th>来源通道</th><th>登记状态</th></tr></thead><tbody>' +
-        D.trials.map(function (t) {
-          var m = matchTrial(t);
-          return '<tr><td>' + esc(t.id) + '</td><td>' + esc(t.title) + '</td><td>' + tierBadge(m.tier) + '</td><td>' + esc(t.source) + '</td><td class="muted">登记状态，未核实</td></tr>';
-        }).join('') + '</tbody></table></div>' +
-        '<p class="muted">全库 461 条经 fetch-cll-trials 四件套入库（本地 sqlite）；本页演示 5 条。在线通道终态如实透传：FAILED/无覆盖 ≠ 查过。NMPA 获批状态一律「待官网复核」。</p></section>';
+      body = '<section class="card"><div class="card-head"><h2 class="h2">登记摘录（快照 ' + esc(D.trialSnapshot) + '）</h2>' +
+        badge('状态：登记状态，未核实') + '</div>' +
+        '<div class="chips chips-wrap" role="group" aria-label="按来源筛选">' +
+        [['all', '全部来源（' + D.trials.length + '）'], ['chinadrugtrials', '药物临床试验登记平台'], ['ictrp', 'ICTRP']].map(function (f) {
+          return '<button type="button" class="chip" data-act="trial-filter" data-src="' + f[0] + '" aria-pressed="' + (state.trialFilter === f[0]) + '">' + f[1] + '</button>';
+        }).join('') + '</div>' +
+        (function () {
+          var list = state.trialFilter === 'all' ? D.trials : D.trials.filter(function (t) { return t.source === state.trialFilter; });
+          if (!list.length) return '<div class="chart-empty"><p>这个来源在当前快照里没有条目（如实显示空态，不代表全库无试验）。</p></div>';
+          return list.map(function (t) {
+            return '<article class="trial-item"><h3 class="h3">' + esc(t.id) + ' · ' + esc(t.title) + '</h3>' +
+              '<p class="muted small">' + esc(t.phase) + ' · ' + esc(t.source) + ' · 登记状态，未核实</p>' +
+              '<p class="muted small">登记 ≠ 有效 ≠ 可入组；参与条件以登记平台原文与研究方答复为准。</p></article>';
+          }).join('');
+        })() + sourceNote + '</section>';
     }
     return head + nav + body;
+  }
+
+  function matchPrompt() {
+    var fields = matchProfileFields();
+    var summary = fields.map(function (f) { return f.k + '：' + (f.v || '未记录'); }).join('；');
+    var ids = D.trials.map(function (t) { return t.id + '（' + t.title + '）'; }).join(' / ');
+    return '请协助我逐条比对入组档案与这些登记条目。档案摘要——' + summary + '。登记条目——' + ids +
+      '。要求：只用「已满足 / 可能冲突 / 无法判定」三档逐条列出，每条写清「我的记录」与来源；' +
+      '缺失字段一律判「无法判定」；不输出匹配度百分比、不排序、不写哪条更适合我；入组判断属于医生与研究中心。';
   }
 
   /* ---- 共病与在用药 comorb ---- */
@@ -986,6 +1042,11 @@
         redrawChart(); break;
       }
       case 'pin-clear': state.chart.pin = null; redrawChart(); break;
+      case 'trial-filter': {
+        state.trialFilter = el.getAttribute('data-src');
+        render();
+        break;
+      }
       case 'toggle-onechart-side': {
         state.onechartSideOpen = !state.onechartSideOpen;
         applyOnechartLayout();
