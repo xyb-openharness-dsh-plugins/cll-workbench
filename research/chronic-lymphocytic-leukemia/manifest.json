@@ -1,0 +1,49 @@
+{
+  "topic": "cll",
+  "year": "2026",
+  "snapshotDate": "2026-10-25",
+  "tool": "unified-trial-mcp @ /Users/sammini/Downloads/unified_search_trials/dist/src/cli/main.js",
+  "queries": [
+    {
+      "keyword": "慢性淋巴细胞白血病",
+      "note": "中文标准名（CLL）"
+    },
+    {
+      "keyword": "小淋巴细胞淋巴瘤",
+      "note": "中文标准名（SLL）"
+    },
+    {
+      "keyword": "慢淋",
+      "note": "中文简称"
+    },
+    {
+      "keyword": "chronic lymphocytic leukemia",
+      "note": "英文标准名"
+    },
+    {
+      "keyword": "small lymphocytic lymphoma",
+      "note": "英文标准名"
+    },
+    {
+      "keyword": "CLL",
+      "note": "英文缩写"
+    }
+  ],
+  "perSourceLimit": 200,
+  "recordCount": 461,
+  "dbCount": 461,
+  "sourceStatusRows": 36,
+  "honesty": {
+    "offlineCorpora": "离线语料覆盖范围以 unified-trial-mcp 各来源终态为准，见 source_statuses 表；失败/无覆盖通道如实记\"未查过\"，不冒充",
+    "statusWording": "登记 ≠ 有效 ≠ 安全 ≠ 可入组；状态一律\"登记状态，未核实\"",
+    "mergeRule": "仅同一登记号（NCT/ChiCTR/CDE 等）合并，其余并排保留来源"
+  },
+  "files": {
+    "trials-2026.jsonl": {
+      "sha256": "d6f54ab135c653ddcdb17fb7c30b11a05a50dec5a23f6f2195d881046f7d42af"
+    },
+    "cll_trials_2026.sqlite": {
+      "sha256": "51fe1721ef9c506cd97576faa6c6e67d29f4cd594adf4782b1383a9cc39affc6"
+    }
+  }
+}
