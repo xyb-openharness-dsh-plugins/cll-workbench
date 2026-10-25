@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.1.0' };
+  var APP_INFO = { version: '0.2.0' };
   var APP_INFO = { version: '0.1.0' };
   var D = window.LYMPAL_DEMO;
 
