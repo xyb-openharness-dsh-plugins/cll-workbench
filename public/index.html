@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.1.0（M2 原型）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a class="skip" href="#view">跳到主要内容</a>
+
+<!-- 顶栏：品牌一步回首页；版本常显；AI 会话区开关 -->
+<header class="topbar">
+  <a class="brand" href="#dash">小淋宝 LymPal <span class="ver">v0.1.0</span></a>
+  <div class="topbar-right">
+    <span class="conn">AI 对话：未连接（原型演示）</span>
+    <button type="button" class="btn" data-act="panel-toggle" aria-controls="session" aria-expanded="true">收起会话区</button>
+  </div>
+</header>
+
+<div class="app" id="app">
+
+  <!-- 一级页导航（13 条；view id 与 docs/INTERACTION-DESIGN.md §二一致） -->
+  <nav class="sidebar" aria-label="一级页面">
+    <ul id="navList">
+      <li><a href="#dash" data-route="dash">看板</a></li>
+      <li><a href="#records" data-route="records">病情整理</a></li>
+      <li><a href="#ww" data-route="ww">观察与等待</a></li>
+      <li><a href="#labs" data-route="labs">指标检测</a></li>
+      <li><a href="#onechart" data-route="onechart">病情一图秀</a></li>
+      <li><a href="#gene" data-route="gene">基因与预后档案</a></li>
+      <li><a href="#med" data-route="med">口服药与治疗</a></li>
+      <li><a href="#trial" data-route="trial">临床研究</a></li>
+      <li><a href="#comorb" data-route="comorb">共病与在用药</a></li>
+      <li><a href="#nutr" data-route="nutr">营养与感染预防</a></li>
+      <li><a href="#mind" data-route="mind">心理支持</a></li>
+      <li><a href="#prep" data-route="prep">复诊准备</a></li>
+      <li><a href="#settings" data-route="settings">设置</a></li>
+    </ul>
+    <p class="nav-note">小淋宝只做整理与照抄；判定都在诊室。隐藏面板不清空草稿。</p>
+  </nav>
+
+  <div class="main-col">
+    <main id="view" tabindex="-1" aria-live="polite"></main>
+  </div>
+
+  <!-- AI 会话区：cll:agent-draft 只填输入框，不自动发送 -->
+  <aside class="session" id="session" aria-label="AI 会话区">
+    <div class="session-head"><strong>AI 会话（原生会话区 · 演示）</strong></div>
+    <div class="session-body">
+      <p class="muted">页面上的「AI 协助（示例）」按钮走 <code>cll:agent-draft</code> 协议：预写提示词 + 病情上下文只填进下面输入框，<strong>不自动发送</strong>；发送由你手动完成，本原型不发起真实请求。</p>
+      <label class="field-label" for="aiPrompt">提示词（待你确认后手动发送）</label>
+      <textarea id="aiPrompt" rows="8" placeholder="点任意页面的「AI 协助（示例）」按钮后，示例提示词会填到这里；本原型不会自动发送。"></textarea>
+      <div class="row">
+        <button type="button" class="btn" data-act="ai-send">发送</button>
+        <button type="button" class="btn" data-act="ai-clear">清空</button>
+      </div>
+      <h3 class="h3">最近一次 cll:agent-draft</h3>
+      <pre class="agent-log" id="agentLog">（尚未触发）</pre>
+      <h3 class="h3">隐私三出口</h3>
+      <p class="muted">导出 / AI 上下文 / 摘要统一经过 <code>filterPrivate(list, exit)</code>；<code>visibility="private"</code> 的条目（情绪记录、私密副作用）默认不进导出与 AI；导出对 private 字段打码（●●）。</p>
+    </div>
+  </aside>
+</div>
+
+<!-- 页脚贴底：flex column + min-height:100vh；版本 + (view,sub) 计数常显 -->
+<footer class="footer">
+  <span>小淋宝 LymPal <b class="ver">v0.1.0</b></span>
+  <span>构建日：2026-10-25</span>
+  <span>一级页 13 · (view,sub) <b id="view-sub-count">19</b></span>
+  <span>数据目录：~/LymPal/病历资料 · 已挂载（本机，演示只读）</span>
+  <span>本原型不构成诊疗意见；数值与文案照抄演示数据。</span>
+</footer>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

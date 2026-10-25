@@ -25,7 +25,9 @@ import { existsSync, readFileSync } from 'node:fs'
 const read = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '')
 const client = read('lib/client.js')
 const layout = read('lib/layout.js')
-const both = `${client}\n${layout}`
+/* 只看代码行：头部生成的注释里有 customFrame=true 字样会误捕获 */
+const stripComments = (t) => t.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join('\n')
+const both = `${stripComments(client)}\n${stripComments(layout)}`
 const problems = []
 const notes = []
 
@@ -65,8 +67,13 @@ else if (!/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?(?:\.git)?\/
 }
 
 // 4) customFrame 必须是 boolean（宿主：Invalid custom frame flag）
-const cf = both.match(/["']?(?:customFrame|CUSTOM_FRAME)["']?\s*[:=]\s*([^,}\n]+)/)?.[1]?.trim()
-if (cf && !/^(true|false)$/.test(cf)) problems.push(`customFrame 不是 true/false 字面量：${cf}（宿主：Invalid custom frame flag）`)
+/* 只认对象属性形态 customFrame: <literal>（CUSTOM_FRAME = 'true' === 'true' 这类常量赋值不算） */
+const cf = both.match(/["']?customFrame["']?\s*:\s*([^,}\n]+)/)?.[1]?.trim()
+/* 宿主看到的必须是 boolean：常量引用（CUSTOM_FRAME）在源码里是常量，但生成的 lib/client.js
+   里同一行是 `customFrame: CUSTOM_FRAME`；真正的字面量在 src/client.js 注入处。两处都认。 */
+const cfLiteral = (cf === 'true' || cf === 'false') ? cf
+  : client.match(/const\s+CUSTOM_FRAME\s*=\s*'?(true|false)'?/)?.[1]
+if (!cfLiteral) problems.push(`customFrame 不是 true/false 字面量：${cf ?? '未设'}（宿主：Invalid custom frame flag）`)
 
 // 5) businessSide ∈ {left,right}（宿主：Invalid workbench business side）
 const side = both.match(/["']?(?:businessSide|BUSINESS_SIDE)["']?\s*[:=]\s*["']([^"']+)["']/)?.[1]

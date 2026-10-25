@@ -11,3 +11,6 @@ output/
 *.sqlite-wal
 *.sqlite-shm
 *.db
+
+# MinerU token（绝不入库）
+.secrets/
