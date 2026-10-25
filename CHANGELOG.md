@@ -1,3 +1,28 @@
+## v0.5.0 · 2026-10-25（包版本 0.5.0）
+
+按用户反馈移除 Demo 里的假 AI 会话框，「和 AI 讨论」改为**真正发到宿主原生会话**。
+
+### 变更
+- **删除演示会话界面**：`#aiPrompt` 输入框、发送/清空按钮、`#agentLog` 全删。原先装进 Desktop 后右侧会出现一个「AI 会话（原生会话区 · 演示）」
+  假框——看着能用，实际不会发、也不连宿主。现在会话区只留宿主原生会话的挂载点 `#agent-mount`。
+- **独立打开如实说明**：无宿主时 `#agent-standalone` 显示"当前是独立打开（没有 DSH Desktop 宿主），因此没有可用的原生会话"，
+  点「和 AI 讨论」也只提示"装进 Desktop 后本按钮会直接发到右侧对话"，**不伪造发送成功**。
+- **「和 AI 讨论」/「AI 协助」真正发送**：页面通过 `postMessage({ type:'cll:agent-draft', prompt, context, autoSubmit:true })`
+  投递给宿主客户端；客户端 `sendNow()` 在 `conversation.input.for(actx)` 上写完草稿后调用宿主公开的
+  `actions.submit()`（源码位置：`SessionInputShell.actions.submit`，见 app.asar 反查）。
+- **提交失败不丢内容**：`actions.submit` 不可用或抛错时降级为草稿并提示"请按回车发送"，绝不静默失败。
+- 开场白（首次调起会话）仍走"只填草稿不代发"——那是需要用户决定说不说的场景，与「和 AI 讨论」区分开。
+
+### 验收
+- `test/client.test.mjs` 新增：页面侧必须有 `postMessage` + `autoSubmit`、不得有 `#aiPrompt`；客户端必须调用 `actions.submit` 且保留 `'drafted'` 降级路径。
+- `test/ui-parity.test.mjs` 新增：安装版 HTML 不得含演示输入框/日志/假发送按钮，必须有 `#agent-mount` 与 `#agent-standalone`。
+- 实测独立打开：`#aiPrompt`/`#agentLog`/假发送按钮均为 null；会话区显示独立打开说明；点讨论弹出准确提示（截图 proto-discuss.png）。
+- check 全绿 · test **43/43** · audit 37/37。
+
+### 未完成（如实）
+- **真机点击发送未验**：需要 DSH Desktop 里真实会话才能验证 `actions.submit` 的实际提交结果；本轮只完成了 API 层接入与静态断言。
+- 一手访谈 0。
+
 ## v0.4.0 · 2026-10-25（包版本 0.4.0）
 
 临床研究页改为**现实形态**（三档比对），依据脚手架 35 号 + 家族最完整实现 GTN v0.7 的对照。

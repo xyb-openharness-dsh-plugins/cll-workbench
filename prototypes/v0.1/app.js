@@ -380,15 +380,28 @@
       records: '最近 ALC ' + c[c.length - 1].alc + ' ' + '10⁹/L；共 ' + c.length + ' 次血常规；副作用/心理条目经 private 过滤后 ' + kept.length + ' 条'
     };
   }
-  function agentDraft(prompt) {
+  /* 把「本页关键信息 + 提示词」交给宿主的原生会话去发。
+     投递协议：window.parent.postMessage({ type:'cll:agent-draft', prompt, context, autoSubmit:true })
+     —— 原生会话的创建与提交由 lib/client.js 负责（页面无权直接操作宿主会话）。
+     独立打开（无宿主）时如实提示，不伪造发送成功。 */
+  function agentDraft(prompt, opts) {
     var ctx = aiContext();
-    var detail = { prompt: prompt, context: ctx };
-    document.dispatchEvent(new CustomEvent('cll:agent-draft', { detail: detail }));
-    var box = $('#aiPrompt');
-    box.value = '【预写提示词】\n' + prompt + '\n\n【病情上下文（自动携带）】\n' +
-      '页面：' + ctx.page + '\n档案：' + ctx.profile + '\n区间：' + ctx.range + '\n记录摘要：' + ctx.records;
-    $('#agentLog').textContent = JSON.stringify(detail, null, 2);
-    toast('提示词已填入会话区输入框（未发送，待你手动确认）');
+    var payload = {
+      type: 'cll:agent-draft',
+      prompt: prompt,
+      context: ctx,
+      autoSubmit: (opts && opts.autoSubmit) !== false
+    };
+    var framed = false;
+    try { framed = window.parent && window.parent !== window; } catch (e) { framed = false; }
+    if (framed) {
+      window.parent.postMessage(payload, window.location.origin);
+      toast(payload.autoSubmit ? '已发送到右侧 AI 对话（含本页关键信息）' : '已填入右侧 AI 对话草稿');
+      return payload;
+    }
+    /* 无宿主：不假装发出去了 */
+    toast('独立打开时没有可用的 AI 会话；装进 DSH Desktop 后本按钮会直接发到右侧对话');
+    return payload;
   }
   function aiBtn(prompt, label) {
     return '<button type="button" class="btn btn-ai" data-act="agent-draft" data-prompt="' + esc(prompt) + '">' +
@@ -1053,16 +1066,11 @@
         break;
       }
       case 'discuss': {
-        /* IP11：拉起 AI 对话栏 + 携带本页关键信息进输入框；不自动发送（IP10 同款守卫） */
-        setSessionOpen(true);
+        /* IP11：拉起 AI 对话栏 + 把本页关键信息与提问一起**发到原生会话**（不再只填草稿） */
         var pTitle = ($('#view h1') || {}).textContent || '本页';
-        var facts = discussFacts();
-        var draft = '【' + pTitle + ' · 本页关键信息】' + facts + '\n\n（请基于上面这些我记录的事实，帮我整理成就诊可以问医生的问题；不要给判断或建议）';
-        var ta = $('#aiPrompt');
-        if (ta) { ta.value = draft; ta.focus(); }
-        var log = $('#agentLog');
-        if (log) log.textContent = '【' + pTitle + '】已把本页关键信息填入输入框，未发送。';
-        toast('已带上本页关键信息；发送由你手动完成');
+        var draft = '【' + pTitle + ' · 本页关键信息】' + discussFacts() +
+          '\n\n请基于上面这些我记录的事实，帮我整理成就诊可以问医生的问题；不要给判断或建议。';
+        agentDraft(draft, { autoSubmit: true });
         break;
       }
       case 'agent-toggle': {
@@ -1143,8 +1151,6 @@
         break;
       }
       case 'kb-close': { var kp = el.closest('.keypad'); if (kp) kp.setAttribute('hidden', ''); break; }
-      case 'ai-send': toast('原型不发起真实请求：提示词仍在输入框，待你手动发送'); break;
-      case 'ai-clear': $('#aiPrompt').value = ''; break;
       case 'panel-toggle': setSessionOpen(!state.sessionOpen); break;
     }
   });
@@ -1271,6 +1277,19 @@
     $('#view-sub-count').textContent = VIEW_SUBS.length; /* 自检计数（页脚常显） */
     document.body.setAttribute('data-session', state.sessionOpen ? 'open' : 'closed');
     agentShellWire();
+    /* 无宿主时：会话区只显示"独立打开无原生会话"的说明；装进 Desktop 后宿主的 client 会接管本区 */
+    (function () {
+      var framed = false;
+      try { framed = window.parent && window.parent !== window; } catch (e) { framed = false; }
+      var note = $('#agent-note'), standalone = $('#agent-standalone');
+      if (!framed) {
+        if (note) note.textContent = '独立打开：无原生会话（装进 Desktop 后可用）';
+        if (standalone) standalone.hidden = false;
+      } else {
+        if (note) note.textContent = 'AI 对话由宿主原生会话提供';
+        if (standalone) standalone.hidden = true;
+      }
+    })();
     render();
   });
   if (document.readyState !== 'loading') {

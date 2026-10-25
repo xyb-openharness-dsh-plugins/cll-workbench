@@ -42,6 +42,17 @@ test('⑤ 图表硬纪律：SVG 根 class="chart" + Fritsch–Carlson 在两侧�
   }
 })
 
+test('⑤b 安装版不得残留演示 AI 会话框（无自绘输入框/发送按钮）', () => {
+  const html = read('public/index.html')
+  assert.doesNotMatch(html, /id="aiPrompt"/, '仍有演示输入框')
+  assert.doesNotMatch(html, /id="agentLog"/, '仍有演示日志区')
+  assert.doesNotMatch(html, /data-act="ai-send"/, '仍有假发送按钮')
+  /* 必须留出宿主原生会话的挂载点 */
+  assert.match(html, /id="agent-mount"/)
+  /* 独立打开时如实说明，而不是显示一个假聊天框 */
+  assert.match(html, /id="agent-standalone"/)
+})
+
 test('⑥ index.html 只差版本占位与数据源引用', () => {
   const strip = (h) => h.replace(/v0\.\d+\.\d+/g, 'vX').replace(/\s+/g, '')
   assert.equal(strip(read('public/index.html')), strip(read('prototypes/v0.1/index.html')))

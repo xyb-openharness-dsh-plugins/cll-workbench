@@ -36,7 +36,21 @@ test('④ Panel：自绘 header + 业务 iframe + 会话 aside + splitter', () =
   assert.match(client, /aria-valuenow/)
 })
 
-test('⑤ 三出口代码级过滤与 agent-draft 命名空间', () => {
+test('⑤ 「和 AI 讨论」走原生会话：postMessage + autoSubmit + 客户端 actions.submit', () => {
+  const pub = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
+  /* 页面侧：投递协议必须带 autoSubmit，且不得再自绘输入框 */
+  assert.match(pub, /type: 'cll:agent-draft'/)
+  assert.match(pub, /autoSubmit:/)
+  assert.match(pub, /window\.parent\.postMessage\(/)
+  assert.doesNotMatch(pub, /id="aiPrompt"/)
+  /* 客户端侧：真正调用宿主公开的提交动作 */
+  assert.match(client, /actions\.submit/)
+  assert.match(client, /input\.for\(actx\)/)
+  /* 提交失败必须降级为草稿而不是丢内容 */
+  assert.match(client, /'drafted'/)
+})
+
+test('⑤b 三出口代码级过滤与 agent-draft 命名空间', () => {
   const pub = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
   assert.match(pub, /filterPrivate/)
   assert.match(pub, /visibility/)

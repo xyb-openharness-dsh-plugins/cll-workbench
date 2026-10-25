@@ -85,6 +85,12 @@ body[data-session="closed"] .session,body[data-session="closed"] .agent-splitter
 
 /* ---------- AI 会话区 ---------- */
 .session{border-left:1px solid var(--line); background:var(--surface); padding:14px 14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; overflow:auto}
+/* 原生会话挂载点：装进 Desktop 时由宿主注入会话节点（页面不自绘聊天框） */
+.agent-mount{display:flex; flex-direction:column; min-height:0; flex:1}
+.agent-mount:empty{display:none}
+.agent-standalone{display:flex; flex-direction:column; gap:8px; padding:12px; border:1px dashed var(--line-strong); border-radius:var(--radius-sm); background:var(--paper); font-size:12.5px}
+.agent-standalone p{margin:0; color:var(--ink-2)}
+.agent-standalone[hidden]{display:none}
 .session-body textarea{
   width:100%; border:1px solid var(--line-strong); border-radius:var(--radius-sm);
   padding:8px 10px; font:inherit; font-size:12.5px; resize:vertical;
