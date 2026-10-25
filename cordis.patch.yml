@@ -1,0 +1,6 @@
+- insert:
+    - id: cll-workbench-main
+      name: "@xyb-community/cll-workbench"
+      config:
+        # 接线前置：root 指向本机资料目录（宿主按会话授权；slug 与目录同名）
+        root: !!js dshHomePath('cll-workbench')
