@@ -293,7 +293,7 @@
     var c = cbcAll();
     return {
       page: state.route.view + (state.route.sub ? '/' + state.route.sub : ''),
-      profile: D.profile.name + ' · ' + D.profile.diagnosis,
+      profile: D.profile.name + ' · ' + D.profile.dxNameText,
       range: c[0].d + ' → ' + c[c.length - 1].d,
       records: '最近 ALC ' + c[c.length - 1].alc + ' ' + '10⁹/L；共 ' + c.length + ' 次血常规；副作用/心理条目经 private 过滤后 ' + kept.length + ' 条'
     };
@@ -409,7 +409,7 @@
     var p = D.profile;
     var html = pageHead('病情整理', '我的淋·档案', '诊断与分期照抄报告原文，双轨并存不换算；判定归医生。', backHome() + aiBtn('帮我把档案里的分期和基因字段抄成一张就诊随身清单（只照抄）'));
     html += '<section class="card"><div class="card-head"><h2 class="h2">确诊档案</h2>' + moreMenu([['edit-record', '改这一条']]) + '</div>' +
-      kvTable([['诊断名', p.diagnosis], ['分期（双轨照抄）', p.stageText], ['诊断日期', p.dxDate], ['医院', p.hospital], ['当前医嘱状态', p.status], ['记录者', p.recorder]]) +
+      kvTable([['诊断名（照抄）', p.dxNameText], ['分期（双轨照抄）', p.stageText], ['诊断日期', p.dxDate], ['医院', p.hospital], ['当前医嘱状态', p.status], ['记录者', p.recorder]]) +
       '</section>' +
       '<section class="card"><div class="card-head"><h2 class="h2">候选核对（S1 示例）</h2>' + badge('AI 候选必经核对') + '</div>' +
       '<p class="muted">来源：' + esc(D.pendingCandidate.src) + '</p>' +
