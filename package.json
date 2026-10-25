@@ -28,7 +28,7 @@
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:schema": "node scripts/check-schema.mjs",
     "check:wording": "node scripts/check-wording.mjs",
-    "check": "node scripts/check-syntax.mjs && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/check-schema.mjs && node scripts/check-wording.mjs && node scripts/check-version.mjs && node scripts/smoke-activate.mjs && node --test test/*.test.mjs",
+    "check": "node scripts/check-syntax.mjs && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/check-schema.mjs && node scripts/check-wording.mjs && node scripts/check-derivative-leftovers.mjs . && node scripts/check-version.mjs && node scripts/smoke-activate.mjs && node --test test/*.test.mjs",
     "check:host": "node scripts/check-host-contract.mjs",
     "smoke:activate": "node scripts/smoke-activate.mjs",
     "verify:desktop": "node scripts/verify-desktop-load.mjs",
@@ -40,7 +40,8 @@
     "pack:check": "npm pack --dry-run",
     "probe:artifact": "node scripts/serve-artifact.mjs",
     "probe:tabs": "python3 scripts/verify-tabs-on-artifact.py",
-    "probe:page-view": "node scripts/probe-page-view.mjs"
+    "probe:page-view": "node scripts/probe-page-view.mjs",
+    "check:leftovers": "node scripts/check-derivative-leftovers.mjs ."
   },
   "dsh": {
     "bundle": {

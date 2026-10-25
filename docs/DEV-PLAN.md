@@ -10,10 +10,10 @@
 | M3 数据模型（G3） | ✅ 签认待补 | schema/0001（19 表）+ freeze-contract sha256 + check-schema 判读列 0 命中 |
 | M4 临床库 | ✅ | fetch-cll-trials 四件套 461 条（chinadrugtrials 118 / ictrp 343）；manifest=jsonl=sqlite 一致 |
 | M5 开发版（V1） | ✅ | 七步移植完成：dsh 12 件 + src/client + lib 4 件 + public 四件套；MinerU 六部件（mineru/import/settings/export/routes/server）；apiBase 单前缀契约 + 双形态回归（test/ui-base 4/4）；**npm test 41/41**；check 全绿；开发版实启 health/bootstrap/export/ui 200 |
-| M6 装机（V2/V3） | ⏳ | 待 pack → 安装 → bundles 登记 → 真机走查 |
-| M7 发布 | ⏳ | 待 tag/Release |
-| M8 BACKLOG 回填 | ⏳ | 待 PR |
-| M9 经验回流 | ⏳ | 待 starter 追补 |
+| M6 装机（V2/V3） | ✅ 装机层 / ⏳ V3 | v0.2.0 装入 Desktop web profile；重启后 verify-desktop-load ✓、安装副本 smoke-activate PASS、宿主日志本包 0 报错；**V3 真机人眼走查待用户打开工作台** |
+| M7 发布 | ✅ | tag `v0.2.0` + Release 附 tgz（sha256 f9b1a18…）+ CHANGELOG 发版段 |
+| M8 BACKLOG 回填 | ✅ PR 已开 | `.github` PR #47（只改状态列，🔵 v0.2.0 附依据） |
+| M9 经验回流 | ✅ | starter 提交 14b3ebc：新增可断言检查器（`check-derivative-leftovers`，本仓抓出 4 处真缺陷）+ L28–L31 + 两个模板增补 + ZERO-TO-DEV 挂钩；starter `npm test` 62/62、`check-starter` pass |
 
 ## 未通过项（不得写成"通过"）
 

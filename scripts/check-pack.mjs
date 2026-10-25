@@ -61,22 +61,22 @@ try {
   server = started.server;
   const base = `http://127.0.0.1:${started.port}`;
 
-  const health = await (await fetch(`${base}/api/cervical/health`)).json();
+  const health = await (await fetch(`${base}/api/cll/health`)).json();
   if (!health.ok) throw new Error(`health 不 ok：${JSON.stringify(health)}`);
   notes.push(`✓ health · ${health.version} · ${health.capabilities.join('/')}`);
 
-  const boot = await (await fetch(`${base}/api/cervical/bootstrap`)).json();
+  const boot = await (await fetch(`${base}/api/cll/bootstrap`)).json();
   const profiles = Object.keys(boot.profiles || {});
   if (!profiles.length) throw new Error('bootstrap 里没有档案（演示数据没播进去）');
   notes.push(`✓ bootstrap · 档案 ${profiles.join('/')} · 试验 ${(boot.trials || []).length} 条 · layout ${boot.layout ? '有' : '无'}`);
 
   for (const p of ['index.html', 'app.js', 'style.css', 'demo-data.js']) {
-    const r = await fetch(`${base}/api/cervical/ui/${p}`);
+    const r = await fetch(`${base}/api/cll/ui/${p}`);
     if (r.status !== 200) throw new Error(`静态文件 ${p}：HTTP ${r.status}`);
   }
   notes.push('✓ 静态四件 · 200');
 
-  const md = await (await fetch(`${base}/api/cervical/export/A.md`)).text();
+  const md = await (await fetch(`${base}/api/cll/export/A.md`)).text();
   if (!/## 最近几次的变化/.test(md)) throw new Error('导出里没有「最近几次的变化」——装的是旧包');
   if (/性交痛|干涩/.test(md)) throw new Error('导出里出现私密原文');
   notes.push(`✓ 导出 · ${Buffer.byteLength(md, 'utf8')} B · 变化段在 · 无私密`);
@@ -86,16 +86,16 @@ try {
   const secret = join(tmp, 'mineru-secret.json');
   process.env.CERVIPAL_MINERU_SECRET = secret;
   process.env.MINERU_TOKEN = ''; // 别让环境变量兜底，掩盖"文件没写进去"
-  const before = await (await fetch(`${base}/api/cervical/settings/mineru`)).json();
+  const before = await (await fetch(`${base}/api/cll/settings/mineru`)).json();
   if (before.configured) throw new Error('临时密钥文件还没写就报已配置（环境变量没清干净？）');
 
-  const bad = await fetch(`${base}/api/cervical/settings/mineru`, {
+  const bad = await fetch(`${base}/api/cll/settings/mineru`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ token: 'sk-bad token' }),
   });
   if (bad.status !== 400) throw new Error(`非法 Token 应给 400，实际 ${bad.status}`);
 
-  const saved = await (await fetch(`${base}/api/cervical/settings/mineru`, {
+  const saved = await (await fetch(`${base}/api/cll/settings/mineru`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ token: 'sk-pack-test-123456' }),
   })).json();
@@ -105,7 +105,7 @@ try {
   const mode = (statSync(secret).mode & 0o777).toString(8);
   if (mode !== '600') throw new Error(`密钥文件权限应为 600，实际 ${mode}`);
 
-  const cleared = await (await fetch(`${base}/api/cervical/settings/mineru`, {
+  const cleared = await (await fetch(`${base}/api/cll/settings/mineru`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'clear' }),
   })).json();

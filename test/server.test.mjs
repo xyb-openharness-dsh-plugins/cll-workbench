@@ -25,7 +25,7 @@ async function withServer(source, fn) {
   try { return await fn(base) } finally { await new Promise((r) => srv.close(r)) }
 }
 
-test('① 前缀命名空间：/api/cll（不是 cervical）', () => {
+test('① 前缀命名空间：/api/cll（不是底本命名空间）', () => {
   assert.equal(API_PREFIX, '/api/cll')
 })
 
