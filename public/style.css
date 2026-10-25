@@ -149,52 +149,145 @@ q.quote{color:var(--ink-2); font-style:normal}
 .entry-card{margin-bottom:0}
 .entry-actions{display:flex; gap:8px; flex-wrap:wrap; margin:6px 0}
 
-/* ---------- 指标卡（3D 翻转；固定高 276） ---------- */
-.series-block{margin-bottom:20px}
-.series-title{border-bottom:1px solid var(--line); padding-bottom:4px}
-.metric-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:10px}
-.mcard{
-  display:block; width:100%; height:276px; padding:0; border:0; background:none;
-  perspective:1100px; min-width:0; cursor:pointer; font:inherit; color:inherit; text-align:left;
+/* ---------- 指标卡（固定尺寸原位翻转：正面摘要 / 背面 sparkline） ---------- */
+.series-block{margin-bottom:22px}
+.series-title{
+  display:flex; align-items:center; gap:7px; margin:0 0 10px;
+  padding-bottom:6px; border-bottom:1px solid var(--line);
+  font-size:15px; font-weight:600;
 }
+.series-count{margin-left:auto; font-size:12.5px; font-weight:400; color:var(--muted)}
+.metric-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(186px,1fr)); gap:14px}
+.mcard{
+  display:block; width:100%; height:204px; padding:0; border:0; background:none;
+  perspective:1200px; min-width:0; cursor:pointer; font:inherit; color:inherit; text-align:left;
+  border-radius:var(--radius);
+}
+.mcard:focus-visible{outline:3px solid var(--brand-deep); outline-offset:3px}
 .mcard-inner{
   position:relative; display:block; height:100%;
-  transform-style:preserve-3d; transition:transform 480ms cubic-bezier(.2,.7,.2,1); will-change:transform;
+  transform-style:preserve-3d;
+  transition:transform 460ms cubic-bezier(.2,.7,.2,1);
+  will-change:transform;
 }
-.mcard[aria-pressed="true"] .mcard-inner{transform:rotateY(180deg)}
+.mcard.is-flipped .mcard-inner{transform:rotateY(180deg)}
 .mface{
-  position:absolute; inset:0; display:flex; flex-direction:column; gap:5px; padding:18px;
-  border:1px solid var(--line); border-radius:18px; background:var(--surface);
+  position:absolute; inset:0; display:flex; flex-direction:column; gap:4px;
+  padding:14px 15px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); box-shadow:var(--shadow);
   overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden;
 }
-.mface.back{transform:rotateY(180deg); background:linear-gradient(165deg,#f6f4fb,#fbfaff)}
-.brow{font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px}
-.dot{width:8px; height:8px; border-radius:50%; display:inline-block; background:var(--brand)}
-.mname{font-size:15px; font-weight:600}
-.mrow{display:flex; align-items:baseline; gap:6px}
-.mval{font-size:33px; font-weight:700; color:var(--brand-deep)}
-.munit{font-size:12.5px; color:var(--muted)}
-.mval-s{font-size:13px; color:var(--ink-2); max-height:3.2em; overflow:hidden}
-.mdelta{font-size:12.5px; color:var(--ink-2)}
-.mnote{font-size:12.5px; color:var(--muted)}
-.mmeta{font-size:12.5px; color:var(--muted); margin-top:auto}
-.ldt-strip{
-  font-size:12.5px; color:var(--ink-2); background:var(--warn-bg); border-radius:8px; padding:5px 8px;
+.mface.front{background:linear-gradient(180deg,var(--soft,#fff) 0%,var(--surface) 62%)}
+.mface.back{
+  transform:rotateY(180deg);
+  background:linear-gradient(170deg,#f7f5fd,#fdfcff);
 }
+.mhead{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted)}
+.mseries{letter-spacing:.01em}
+.mcount{margin-left:auto; font-variant-numeric:tabular-nums}
+.dot{width:8px; height:8px; border-radius:50%; display:inline-block; background:var(--brand); flex:none}
+.mname{font-size:13px; font-weight:600; color:var(--ink); line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mrow{display:flex; align-items:baseline; gap:5px; margin-top:2px}
+.mval{font-size:30px; font-weight:700; letter-spacing:-.02em; color:var(--ink); line-height:1.1}
+.munit{font-size:12.5px; color:var(--muted)}
+.mval-s{font-size:12.5px; color:var(--ink-2); line-height:1.4; max-height:2.8em; overflow:hidden}
+.mrow2{display:flex; align-items:center; gap:4px; min-height:18px}
+.mdelta{display:inline-flex; align-items:center; gap:4px; font-size:12.5px; color:var(--ink-2)}
+.mdelta .arr{font-weight:700}
+.mdelta.up .arr{color:#a8560f}
+.mdelta.down .arr{color:#2f7d4f}
+.mdelta.flat{color:var(--muted)}
+.mdelta-date{font-size:12px; color:var(--muted)}
+.mfoot{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:auto; flex-wrap:nowrap; min-width:0}
+.mfoot-txt{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mfoot-ldt{display:flex}
+.mflip-hint{position:absolute; right:10px; top:11px; font-size:10.5px; color:var(--brand-deep); opacity:.5; white-space:nowrap}
+.mnote{font-size:12px; color:var(--muted); line-height:1.45}
+.mmeta{font-size:11.5px; color:var(--muted); line-height:1.4}
+.ldt-chip{
+  font-size:11px; padding:1px 6px; border-radius:999px;
+  background:var(--warn-bg); color:var(--warn); border:1px solid #f0e0bd;
+}
+.ldt-chip.grey{background:var(--grey-bg); color:var(--grey); border-color:var(--line)}
+.spark{width:100%; height:auto; display:block; margin:2px 0 4px}
+.spark .line{stroke-width:2}
+.spark-end{font-size:12px; font-weight:600; fill:var(--ink-2)}
+.spark-date{font-size:10.5px; fill:var(--muted)}
+.spark-empty{font-size:12px; color:var(--muted); padding:14px 0}
 
-/* ---------- 图表 ---------- */
+/* ---------- 一图秀（左栏控制 + 右栏图） ---------- */
+.onechart-layout{display:grid; grid-template-columns:minmax(232px,268px) minmax(0,1fr); gap:18px; align-items:start}
+.onechart-side{
+  display:flex; flex-direction:column; gap:14px;
+  padding:16px; border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--surface); box-shadow:var(--shadow);
+  position:sticky; top:16px;
+}
+.side-block{display:flex; flex-direction:column; gap:8px}
+.side-title{
+  display:flex; align-items:center; gap:8px; margin:0;
+  font-size:12.5px; font-weight:600; color:var(--muted);
+  letter-spacing:.06em; text-transform:none;
+}
+.side-count{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--brand-deep); font-weight:600}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{
+  min-height:32px; padding:4px 11px; font-size:12.5px;
+  border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-2);
+}
+.chip[aria-pressed="true"]{background:var(--brand-soft); border-color:var(--brand); color:var(--brand-deep); font-weight:600}
+.switch-row{display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--ink-2)}
+.switch-row input{margin-top:3px; accent-color:var(--brand-deep)}
+.pick-scroll{max-height:340px; overflow:auto; padding-right:4px}
+.pick-group{margin-bottom:12px}
+.pick-group-head{display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:12.5px; font-weight:600}
+.pick-row{
+  display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:8px;
+  font-size:12.5px; color:var(--ink-2); cursor:pointer;
+}
+.pick-row:hover{background:var(--brand-soft)}
+.pick-row input{accent-color:var(--brand-deep); flex:none}
+.pick-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pick-unit{color:var(--muted); font-size:11.5px}
+.onechart-main{min-width:0}
+.chart-legend-note{font-size:12px; color:var(--muted); margin:2px 0 8px}
 .chart-wrap{min-width:0}
-.chart{width:100%; height:auto; display:block; color:var(--ink-2)}
+.chart{width:100%; height:auto; display:block; color:var(--ink-2); overflow:visible}
 .chart .line{fill:none; stroke-width:2.2; stroke-dasharray:1; stroke-dashoffset:1; animation:draw .85s cubic-bezier(.3,.7,.3,1) forwards}
-.chart .pt{cursor:pointer}
+.chart .pt{cursor:pointer; transition:r .12s}
+.chart .pt:hover{r:5}
+.chart .pt.pinned{stroke:#fff; stroke-width:2}
 .chart .lbl{font-size:12.5px; fill:var(--ink-2)}
-.chart .tick{font-size:12.5px; fill:var(--muted)}
-.chart.mini .line{stroke-width:2}
+.chart .tick{font-size:11.5px; fill:var(--muted)}
+.chart .tick-line{stroke:currentColor; opacity:.28}
+.chart .tx-bar,.chart .tx-line{pointer-events:none}
+.chart .tx-lbl{font-size:11.5px; fill:var(--action)}
 @keyframes draw{to{stroke-dashoffset:0}}
-.axis-note{font-size:12.5px; color:var(--muted); margin:4px 0}
-.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-2); margin:4px 0}
-.lg-item{display:inline-flex; align-items:center; gap:5px}
-.lg-item i{width:10px; height:3px; border-radius:2px; display:inline-block}
+.axis-note{font-size:12px; color:var(--muted); margin:6px 0 2px}
+.legend{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 2px}
+.lg-item{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 9px; border:1px solid var(--line); border-radius:999px;
+  background:#fff; font-size:12px; color:var(--ink-2); min-height:30px;
+}
+.lg-item i{width:12px; height:3px; border-radius:2px; display:inline-block; flex:none}
+.lg-range{color:var(--ink); font-variant-numeric:tabular-nums}
+.lg-n{color:var(--muted)}
+.pin-readout{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin:0 0 8px; padding:8px 12px; border-radius:10px;
+  background:var(--brand-soft); border:1px solid var(--line-strong);
+  font-size:12.5px;
+}
+.pin-dot{width:9px; height:9px; border-radius:50%; flex:none}
+.pin-val{font-weight:700; font-variant-numeric:tabular-nums}
+.pin-meta{color:var(--muted)}
+.btn-quiet{margin-left:auto; min-height:28px; padding:2px 10px; font-size:12px}
+.chart-empty{
+  display:flex; align-items:center; justify-content:center; min-height:180px;
+  border:1px dashed var(--line-strong); border-radius:var(--radius-sm);
+  color:var(--muted); font-size:13px; text-align:center; padding:20px;
+}
 
 /* ---------- LDT 并排 ---------- */
 .ldt-pair{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:center}
@@ -298,6 +391,10 @@ dialog.modal::backdrop{background:rgba(44,42,58,.35); backdrop-filter:blur(2px)}
   .nav-note{display:none} /* 30 号：可让位的是口号，不是二级功能 */
   .session{border-left:0; border-top:1px solid var(--line)}
   #view{padding:18px 16px 36px}
-  .dash-grid,.metric-grid,.phase-detail,.form5,.form6,.ldt-pair{grid-template-columns:minmax(0,1fr)}
+  .dash-grid,.phase-detail,.form5,.form6,.ldt-pair{grid-template-columns:minmax(0,1fr)}
+  .metric-grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+  .onechart-layout{grid-template-columns:minmax(0,1fr)}
+  .onechart-side{position:static}
+  .pick-scroll{max-height:none}
   .chart-wrap{overflow-x:auto}
 }

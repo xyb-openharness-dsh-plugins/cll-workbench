@@ -7,6 +7,21 @@
 2. **一图秀**：增加**指标选择窗口**，可挑选进入一图的指标。
 3. **临床试验**：CLL 有病理/基因维度需求，按「个人基因病理维护建档 → 搜索或 AI 协助匹配 → 查询自带 sqlite + 外部工具技能 → 匹配结果（带匹配指数与格式）」思路实现；展现参考肝癌临床展现图（指令附 biliary-tract 原型路径在本机不存在，以远端 liver-cancer-workbench 思路 + starter 27 号指标卡规范实现，如实留痕）。
 
+### 1.1 用户 2026-10-25 界面风格追加要求（原型两块重写，来源：用户原话）
+> 「界面风格不太一致，对齐下脚手架+乳腺癌风格，一图秀=左栏（时间范围 chips + 分组指标勾选即时更新 + 显示开关）+ 每条线按自身范围缩放 + 图例带全期区间 + 点选 pin 显示数值/来源；指标卡=固定尺寸原位翻转，正面「分类色点+当前值+较前次箭头+记录数」，背面 sparkline 带端值与日期。」
+
+落实登记（逐条可验）：
+| 要求 | 实现 | 验收证据 |
+| --- | --- | --- |
+| 一图秀左栏 | `.onechart-layout` 两列：左 `.onechart-side`（sticky）含时间 chips / 显示开关 / 分组指标勾选 | 截图 proto-onechart.png；DOM 断言 side/chips=4/switches=2/picks=10 |
+| 分组勾选即时更新 | change 事件 → 只重绘 `#chart-panel`，计数与副标题同步 | proto-onechart-picker.png（切 12m 后 6 点） |
+| 每条线按自身范围缩放 | `lineScale()` 取该指标全期 min/max；图注常显「不同指标数值不可比」 | 图例 4.2–19.6 与 112–128 两组区间并排 |
+| 图例带全期区间 | `.lg-item` = 色点 + 名称 + 全期 min–max + 点数 | DOM `.lg-item` 计数 |
+| 点选 pin | 点圆点/点图例末点 → `.pin-readout` 显示值+日期+来源+清除 | proto-onechart-picker.png 读数条 |
+| 指标卡固定尺寸原位翻转 | `.mcard{height:204px}` + `.is-flipped` rotateY | proto-labs-flip.png |
+| 正面四要素 | 分类色点 + 当前值 + 较前次箭头（含 %）+ 记录数 | proto-labs.png 逐卡可见 |
+| 背面 sparkline 带端值与日期 | `sparkSVG()` 末值标签 + 首末日期 | proto-labs-flip.png |
+
 ## 二、家族硬纪律（摘录，全文见 AGENTS.md / docs 编号文档）
 不修绿；✅实测/🔧骨架/⏳未实现三态如实；数据层 ORDER BY rowid、显式 null、in_use、分节 *_title、分类不进趋势；前端页脚贴底、[hidden]、字号 12.5–15、面板 25–45% 可拖可收、无判读列、private 三出口代码级过滤；改包必升版；public 与原型逐字符对齐；BACKLOG 改前先 pull。
 

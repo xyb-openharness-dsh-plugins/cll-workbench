@@ -3,15 +3,10 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
+  var APP_INFO = { version: '0.1.0' };
+  var APP_INFO = { version: '0.1.0' };
   var D = window.LYMPAL_DEMO;
 
-
-  /* ================= 宿主接入（apiBase 双形态 + hydrate） =================
-   * apiBase() 只返回**挂载前缀**：页面在 /api/cll/ui/ 下 → ''；若被宿主挂到 /w/xxx 子路径
-   * → '/w/xxx'；file:// 直接打开（路径里没有 /ui/）→ ''。
-   * 调用处一律 `${apiBase()}/api/cll/<endpoint>`，只拼一次，避免 /api/cll/api/cll 双前缀。 */
-
-  /* 开发版：库里有真实档案时覆盖演示数据；失败一律静默回退演示（不弹错误、不遮挡界面）。 */
   function loadProfile() {
     return fetch(apiBase() + '/api/cll/profile/demo', { headers: { accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -47,6 +42,8 @@
   }
   function days(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
   function fmtD(iso) { return iso ? iso.slice(0, 10) : '—'; }
+  function shortLab(lab) { return String(lab || '').replace(/^.*?(医院|中心)/, '$1').slice(0, 12); }
+  function shortMd(iso) { return typeof iso === 'string' && iso.length >= 10 ? iso.slice(5, 10) : '—'; }
   function toast(msg) {
     var t = $('#toast');
     t.textContent = msg;
@@ -81,7 +78,7 @@
   var state = {
     route: parseHash(),
     flipped: new Set(),          /* 指标卡翻面，存 key（27 号：状态存 key 不存 DOM） */
-    chart: { sel: ['alc', 'hgb'], range: 'all', tx: true, pin: null }, /* 一图秀 */
+    chart: { sel: ['alc', 'hgb'], range: 'all', tx: true, pin: null, pinOn: true }, /* 一图秀 */
     asked: {},                   /* 触发词表勾选"我想问的" */
     kbTarget: null,              /* 数字键盘组件目标输入 */
     extra: { cbc: [], questions: D.questions.slice(), checked: [] } /* 本机写入（演示内存态） */
@@ -170,151 +167,226 @@
     };
   }
 
-  /* ================= SVG 折线图（根 class="chart"；每线独立归一化） ================= */
-  var CHART_W = 720, CHART_H = 260, PAD = { l: 8, r: 64, t: 26, b: 26 };
+  /* ================= SVG 折线图（根 class="chart"；每条线按自身全期范围缩放） ================= */
+  var CHART_W = 760, CHART_H = 300, PAD = { l: 14, r: 74, t: 26, b: 34 };
   var SERIES_COLORS = { '血象': '#2f5fa8', '生化': '#7a5aa0', '分子': '#a8642f', '体格': '#4a7d5e' };
-  function timeRange(range, all) {
-    var last = all[all.length - 1].d;
-    if (range === 'all') return null;
-    var months = { '6m': 6, '12m': 12, '3m': 3 }[range] || 0;
-    if (!months) return null;
-    var t = new Date(last); t.setMonth(t.getMonth() - months);
+  var SERIES_SOFT = { '血象': '#e8eef8', '生化': '#efeaf6', '分子': '#f8efe6', '体格': '#e9f2ec' };
+
+  function timeRange(range, anchorD) {
+    var months = { '3m': 3, '6m': 6, '12m': 12 }[range] || 0;
+    if (!months || !anchorD) return null;
+    var t = new Date(anchorD); t.setMonth(t.getMonth() - months);
     return t.toISOString().slice(0, 10);
   }
-  function chartSVG(codes, range, showTx) {
+
+  /* 每条线按**自身全期** min/max 归一化（16 号 0.2）：切时间窗不改变线形。 */
+  function lineScale(m) {
+    var vals = m.pts.filter(function (p) { return typeof p.v === 'number'; }).map(function (p) { return p.v; });
+    if (!vals.length) return null;
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var span = (hi - lo) || Math.max(Math.abs(hi) * 0.08, 1);
+    return { lo: lo, hi: hi, span: span };
+  }
+
+  function chartSVG(codes, range, showTx, pin) {
     var all = metrics();
-    var globalDates = [];
-    all.forEach(function (m) { m.pts.forEach(function (p) { globalDates.push(p.d); }); });
-    globalDates.sort();
-    var from = timeRange(range, all.reduce(function (acc, m) { return m.pts.length ? acc.concat([m.pts[m.pts.length - 1]]) : acc; }, []).sort(function (a, b) { return a.d < b.d ? -1 : 1; }));
-    var t0 = from ? from : globalDates[0], t1 = globalDates[globalDates.length - 1];
+    var dateUniverse = [];
+    all.forEach(function (m) { m.pts.forEach(function (p) { dateUniverse.push(p.d); }); });
+    dateUniverse.sort();
+    if (!dateUniverse.length) {
+      return '<div class="chart-empty"><p>还没有任何指标记录，先记一条再来叠看。</p></div>';
+    }
+    var lastDate = dateUniverse[dateUniverse.length - 1];
+    var from = timeRange(range, lastDate);
+    var t0 = from || dateUniverse[0], t1 = lastDate;
     var x = function (d) {
       var span = days(t0, t1) || 1;
       return PAD.l + (days(t0, d) / span) * (CHART_W - PAD.l - PAD.r);
     };
     var picked = codes.map(metricByCode).filter(Boolean);
-    var msgs = [], drawn = [];
-    var txTop = showTx ? 22 : 0;
-    var g = '', labels = '', dots = '';
+    var drawn = [], msgs = [], paths = [], dots = '', labels = '';
+    var plotTop = PAD.t + (showTx ? 26 : 6), plotBottom = CHART_H - PAD.b, plotH = plotBottom - plotTop;
+
     picked.forEach(function (m, si) {
-      var pts = m.pts.filter(function (p) { return p.d >= t0 && p.d <= t1; });
-      if (m.qual) { msgs.push(esc(m.name) + '：描述性内容不进折线（分类不进趋势）'); return; }
-      if (!pts.length) { msgs.push(esc(m.name) + '：这个时间窗里没有所选指标'); return; }
-      var vals = m.pts.map(function (p) { return p.v; }); /* 归一化取全期 min/max（16 号 0.2） */
-      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-      var span = (hi - lo) || Math.max(Math.abs(hi) * 0.08, 1);
-      var y = function (v) { return PAD.t + txTop + (1 - (v - lo) / span) * (CHART_H - PAD.t - txTop - PAD.b); };
-      var col = SERIES_COLORS[m.series];
+      if (m.qual) { msgs.push(esc(mShort(m)) + '：描述性内容不进折线（分类不进趋势）'); return; }
+      var scale = lineScale(m);
+      if (!scale) { msgs.push(esc(mShort(m)) + '：还没有数值记录'); return; }
+      var pts = m.pts.filter(function (p) { return typeof p.v === 'number' && p.d >= t0 && p.d <= t1; });
+      if (!pts.length) { msgs.push(esc(mShort(m)) + '：这个时间窗里没有记录'); return; }
+      var y = function (v) { return plotTop + (1 - (v - scale.lo) / scale.span) * plotH; };
+      var col = SERIES_COLORS[m.series] || '#2f5fa8';
       var xy = pts.map(function (p) { return [x(p.d), y(p.v)]; });
-      if (xy.length > 1) {
-        g += '<path class="line" pathLength="1" stroke="' + col + '" d="' + smoothPath(xy) + '"/>';
-      } else { msgs.push(esc(m.name) + '：只有 1 次记录，暂不连线'); }
+      if (xy.length > 1) paths.push({ code: m.code, d: smoothPath(xy), col: col });
       pts.forEach(function (p, i) {
-        var lastPt = i === pts.length - 1;
-        dots += '<circle class="pt" cx="' + r2(x(p.d)) + '" cy="' + r2(y(p.v)) + '" r="' + (lastPt ? 4 : 2.6) +
-          '" fill="' + col + '"><title>' + esc(m.name) + '：' + p.v + ' ' + esc(m.unit) + ' · ' + fmtD(p.d) + ' · ' + esc(p.lab || '') + '</title></circle>';
-        if (lastPt && xy.length > 1) {
-          var lx = x(p.d), anchor = (CHART_W - lx) < 46 ? 'end' : 'start', dy = (si % 2 ? -12 : 4);
-          labels += '<text class="lbl" x="' + r2(lx + (anchor === 'end' ? -6 : 6)) + '" y="' + r2(y(p.v) + dy) +
+        var isLast = i === pts.length - 1;
+        var pinned = pin && pin.code === m.code && pin.d === p.d;
+        dots += '<circle class="pt' + (pinned ? ' pinned' : '') + '" cx="' + r2(x(p.d)) + '" cy="' + r2(y(p.v)) + '" r="' + (pinned ? 5.5 : isLast ? 4 : 2.8) +
+          '" fill="' + col + '" data-act="pin-pt" data-code="' + m.code + '" data-d="' + p.d + '" tabindex="0" role="button"' +
+          ' aria-label="' + esc(mShort(m)) + ' ' + p.d + ' 值 ' + p.v + ' ' + esc(m.unit) + '"><title>' +
+          esc(mShort(m)) + '：' + p.v + ' ' + esc(m.unit) + ' · ' + p.d + '</title></circle>';
+        if (isLast && xy.length > 1) {
+          var lx = x(p.d), anchor = (CHART_W - lx) < 60 ? 'end' : 'start';
+          labels += '<text class="lbl" x="' + r2(lx + (anchor === 'end' ? -8 : 8)) + '" y="' + r2(y(p.v) + (si % 2 ? -12 : 8) + si * 3) +
             '" text-anchor="' + anchor + '" fill="' + col + '">' + p.v + ' ' + esc(m.unit) + '</text>';
         }
       });
-      drawn.push({ m: m, lo: lo, hi: hi, n: pts.length });
+      drawn.push({ m: m, lo: scale.lo, hi: scale.hi, n: pts.length, col: col });
     });
-    /* 治疗条：独立泳道（不压曲线；关掉后曲线坐标不变——坐标不依赖此开关） */
+
+    /* 治疗条：绘图区上方独立泳道（关掉后数据坐标不变） */
     var tx = '';
-    if (showTx) {
-      var txs = [{ d: '2026-06-01', label: '泽布替尼起（演示）' }];
-      txs.forEach(function (e) {
+    if (showTx && D.txEvents && D.txEvents.length) {
+      var laneY = PAD.t - 2;
+      D.txEvents.forEach(function (e) {
         var ex = x(e.d);
-        tx += '<line x1="' + r2(ex) + '" y1="' + (PAD.t) + '" x2="' + r2(ex) + '" y2="' + (CHART_H - PAD.b) + '" stroke="' + 'currentColor' + '" stroke-dasharray="3 6" opacity=".4"/>' +
-          '<text class="lbl" x="' + r2(ex) + '" y="' + (PAD.t - 4) + '" text-anchor="middle">' + esc(e.label) + '</text>';
+        if (ex < PAD.l || ex > CHART_W - PAD.r) return;
+        tx += '<rect class="tx-bar" x="' + r2(ex - 3) + '" y="' + laneY + '" width="6" height="12" rx="3" fill="' + (e.color || '#983654') + '" opacity=".55"/>' +
+          '<line class="tx-line" x1="' + r2(ex) + '" y1="' + (laneY + 12) + '" x2="' + r2(ex) + '" y2="' + plotBottom + '" stroke="' + (e.color || '#983654') + '" stroke-dasharray="2 5" opacity=".35"/>' +
+          '<text class="tx-lbl" x="' + r2(ex + 6) + '" y="' + (laneY + 10) + '">' + esc(e.label) + '</text>';
       });
     }
-    /* 月刻度（>7 隔一取一） */
-    var ticks = '', seen = {};
-    globalDates.forEach(function (d) {
+
+    /* 月刻度 */
+    /* 月刻度：按最小像素间距（92 viewBox px）抽稀，标签用 YY-MM 缩短；保证不叠 */
+    var ticks = '', seen = {}, lastX = -1e9;
+    dateUniverse.forEach(function (d) {
       var key = d.slice(0, 7);
       if (seen[key] || d < t0 || d > t1) return;
-      seen[key] = 1;
-      ticks += '<line x1="' + r2(x(d)) + '" y1="' + (CHART_H - PAD.b) + '" x2="' + r2(x(d)) + '" y2="' + (CHART_H - PAD.b + 4) + '" stroke="currentColor" opacity=".35"/>' +
-        '<text class="tick" x="' + r2(x(d)) + '" y="' + (CHART_H - 8) + '" text-anchor="middle">' + key + '</text>';
+      var px = x(d);
+      if (px - lastX < 92) return;
+      seen[key] = 1; lastX = px;
+      ticks += '<line class="tick-line" x1="' + r2(px) + '" y1="' + plotBottom + '" x2="' + r2(px) + '" y2="' + (plotBottom + 4) + '"/>' +
+        '<text class="tick" x="' + r2(px) + '" y="' + (CHART_H - 12) + '" text-anchor="middle">' + key.slice(2) + '</text>';
     });
+
+    /* 图例：色点 + 名称 + 全期区间 + 点数（16 号 0.2：必须给全期 min–max） */
     var legend = drawn.map(function (o) {
-      return '<span class="lg-item"><i style="background:' + SERIES_COLORS[o.m.series] + '"></i>' + esc(mShort(o.m)) +
-        ' · 全期 ' + o.lo + '–' + o.hi + ' ' + esc(o.m.unit) + ' · ' + o.n + ' 点</span>';
+      return '<button type="button" class="lg-item" data-act="pin-last" data-code="' + o.m.code + '">' +
+        '<i style="background:' + o.col + '"></i><b>' + esc(mShort(o.m)) + '</b>' +
+        '<span class="lg-range">' + o.lo + '–' + o.hi + ' ' + esc(o.m.unit) + '</span>' +
+        '<span class="lg-n">' + o.n + ' 点</span></button>';
     }).join('');
-    var note = msgs.length ? '<p class="muted">' + msgs.join('；') + '</p>' : '';
-    return '<div class="chart-wrap"><svg class="chart" viewBox="0 0 ' + CHART_W + ' ' + CHART_H + '" role="img" ' +
-      'aria-label="趋势图：每条线按该指标全部记录范围缩放，不代表不同指标数值可比">' + tx + g + dots + labels + ticks + '</svg>' +
-      '<p class="axis-note">↑ 每条线按该指标全部记录范围缩放，不代表不同指标数值可比</p>' +
-      '<div class="legend">' + legend + '</div>' + note + '</div>';
+
+    /* pin 读数条：显示被点选点的值/日期/来源 */
+    var pinBar = '';
+    if (pin) {
+      var pm = metricByCode(pin.code);
+      if (pm) {
+        var pp = null; pm.pts.forEach(function (p) { if (p.d === pin.d) pp = p; });
+        if (pp) {
+          pinBar = '<div class="pin-readout" role="status"><span class="pin-dot" style="background:' + (SERIES_COLORS[pm.series] || '#2f5fa8') + '"></span>' +
+            '<b>' + esc(mShort(pm)) + '</b><span class="pin-val">' + pp.v + ' ' + esc(pm.unit) + '</span>' +
+            '<span class="pin-meta">' + fmtD(pp.d) + ' · 来源：' + esc(pp.lab || '报告单原文') + '</span>' +
+            '<button type="button" class="btn btn-quiet" data-act="pin-clear">清除</button></div>';
+        }
+      }
+    }
+
+    var empty = drawn.length ? '' :
+      '<div class="chart-empty"><p>这个时间窗里没有所选指标的记录。可以扩大时间范围，或再勾几条指标。</p></div>';
+
+    return '<div class="chart-wrap">' + pinBar +
+      '<svg class="chart" viewBox="0 0 ' + CHART_W + ' ' + CHART_H + '" role="img" aria-label="趋势图：每条线按该指标全部记录范围缩放，不代表不同指标数值可比">' +
+      '<g class="tx-lane">' + tx + '</g>' + ticks + paths.map(function (p) {
+        return '<path class="line" data-code="' + p.code + '" pathLength="1" stroke="' + p.col + '" d="' + p.d + '"/>';
+      }).join('') + dots + labels + '</svg>' +
+      empty +
+      '<p class="axis-note">每条线按该指标自己的全部记录范围缩放；不同指标之间数值不可比。</p>' +
+      (legend ? '<div class="legend">' + legend + '</div>' : '') +
+      (msgs.length ? '<p class="muted">' + msgs.join('；') + '</p>' : '') +
+      '</div>';
   }
   function mShort(m) { return m.name.replace(/（.*?）/g, ''); }
 
-  /* ================= 指标卡（分系列 + 3D 翻转；同一组件两处复用） ================= */
+  /* ================= 指标卡（固定尺寸原位翻转；正面=色点+当前值+较前次箭头+记录数；背面=sparkline 带端值日期） ================= */
+  function deltaOf(m) {
+    if (m.qual) return null;
+    var pts = m.pts.filter(function (p) { return typeof p.v === 'number'; });
+    if (pts.length < 2) return null;
+    var last = pts[pts.length - 1], prev = pts[pts.length - 2];
+    var d = last.v - prev.v;
+    var pct = prev.v ? (d / prev.v) * 100 : null;
+    return { d: d, pct: pct, prevD: prev.d, dir: d > 0 ? 'up' : d < 0 ? 'down' : 'flat' };
+  }
+
+  function sparkSVG(m, w, h) {
+    var pts = m.pts.filter(function (p) { return typeof p.v === 'number'; }).slice(-12);
+    if (pts.length < 2) return '<div class="spark-empty">只有 1 次记录，暂不连线</div>';
+    var vals = pts.map(function (p) { return p.v; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), span = (hi - lo) || 1;
+    var xy = pts.map(function (p, i) {
+      return [8 + i * ((w - 16) / (pts.length - 1)), 10 + (1 - (p.v - lo) / span) * (h - 30)];
+    });
+    var col = SERIES_COLORS[m.series] || '#2f5fa8';
+    var first = pts[0], last = pts[pts.length - 1];
+    return '<svg class="chart spark" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(mShort(m)) + ' 最近 ' + pts.length + ' 次趋势">' +
+      '<path class="line" pathLength="1" stroke="' + col + '" d="' + smoothPath(xy) + '"/>' +
+      xy.map(function (p, i) { return '<circle cx="' + r2(p[0]) + '" cy="' + r2(p[1]) + '" r="' + (i === xy.length - 1 ? 3 : 2) + '" fill="' + col + '"/>'; }).join('') +
+      '<text class="spark-end" x="' + r2(xy[xy.length - 1][0]) + '" y="' + r2(xy[xy.length - 1][1] - 6) + '" text-anchor="end">' + last.v + '</text>' +
+      '<text class="spark-date" x="8" y="' + (h - 3) + '" text-anchor="start">' + fmtD(first.d) + '</text>' +
+      '<text class="spark-date" x="' + (w - 8) + '" y="' + (h - 3) + '" text-anchor="end">' + fmtD(last.d) + '</text>' +
+      '</svg>';
+  }
+
   function metricCardHTML(m) {
     var flipped = state.flipped.has(m.code);
-    var latest = m.pts[m.pts.length - 1];
-    var prev = m.pts.length > 1 ? m.pts[m.pts.length - 2] : null;
-    var delta = '';
-    if (m.qual) delta = '描述性内容，不进折线';
-    else if (!latest) delta = '还没有记录';
-    else if (!prev) delta = '暂无可比较的前次记录';
-    else {
-      var d = r2(latest.v - prev.v);
-      delta = (d > 0 ? '↑ +' : d < 0 ? '↓ ' : '→ ') + d + ' ' + m.unit + '（较 ' + fmtD(prev.d) + '）';
-    }
-    var frontVal = m.qual ? '<span class="mval-s">' + esc(latest ? latest.text : '还没有记录') + '</span>'
-      : (latest ? '<span class="mval">' + latest.v + '</span><span class="munit">' + esc(m.unit) + '</span>' : '<span class="mval-s">还没有记录</span>');
+    var nums = m.pts.filter(function (p) { return typeof p.v === 'number'; });
+    var latest = nums[nums.length - 1] || null;
+    var dl = deltaOf(m);
+    var col = SERIES_COLORS[m.series] || '#2f5fa8';
+    var soft = SERIES_SOFT[m.series] || '#f2f4f8';
+
+    var arrow = '';
+    if (m.qual) arrow = '<span class="mdelta flat">描述性，不进折线</span>';
+    else if (!latest) arrow = '<span class="mdelta flat">还没有记录</span>';
+    else if (!dl) arrow = '<span class="mdelta flat">暂无可比较的前次</span>';
+    else arrow = '<span class="mdelta ' + dl.dir + '">' +
+      '<span class="arr">' + (dl.dir === 'up' ? '↑' : dl.dir === 'down' ? '↓' : '→') + '</span>' +
+      (dl.d > 0 ? '+' : '') + r2(dl.d) + ' ' + esc(m.unit) +
+      (dl.pct === null ? '' : '（' + (dl.pct > 0 ? '+' : '') + r2(dl.pct) + '%）') +
+      '<span class="mdelta-date">较 ' + fmtD(dl.prevD) + '</span></span>';
+
     var ldtTag = (m.code === 'alc') ? (function () {
       var L = ldtDays();
-      return L ? '<div class="ldt-strip">LDT（倍增时间）：' + L.days + ' 天 · 只算天数不判读 · 并排见指南原文：「' + esc(D.ldtLimitQuote) + '」（' + esc(D.ldtLimitSrc) + '）</div>' : '';
+      return L ? '<span class="ldt-chip">LDT ' + L.days + ' 天（只算天数）</span>' : '<span class="ldt-chip grey">LDT 待两点</span>';
     })() : '';
-    var backPts = m.pts.slice(-8);
-    var backChart = '';
-    if (m.qual) {
-      backChart = '<p class="muted">描述性评估：不画折线（分类不进趋势）。最近记录见正面。</p>';
-    } else if (backPts.length > 1) {
-      var vals = backPts.map(function (p) { return p.v; });
-      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), span = (hi - lo) || 1;
-      var w = 250, h = 74, xy = backPts.map(function (p, i) {
-        return [6 + i * ((w - 12) / (backPts.length - 1)), 8 + (1 - (p.v - lo) / span) * (h - 20)];
-      });
-      backChart = '<svg class="chart mini" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(m.name) + ' 最近 ' + backPts.length + ' 次趋势">' +
-        '<path class="line" pathLength="1" stroke="' + SERIES_COLORS[m.series] + '" d="' + smoothPath(xy) + '"/>' +
-        xy.map(function (p) { return '<circle cx="' + r2(p[0]) + '" cy="' + r2(p[1]) + '" r="2.4" fill="' + SERIES_COLORS[m.series] + '"/>'; }).join('') + '</svg>';
-    } else {
-      backChart = '<p class="muted">只有 1 次记录，暂不连线。</p>';
-    }
-    var hist = m.qual
-      ? m.pts.map(function (p) { return fmtD(p.d) + '：' + esc(p.text); }).join('；')
-      : '最近 ' + backPts.length + ' 次：' + backPts.map(function (p) { return fmtD(p.d) + ' ' + p.v; }).join(' / ');
-    return '<button type="button" class="mcard" role="group" data-act="flip" data-code="' + m.code + '" aria-pressed="' + flipped + '"' +
-      ' aria-roledescription="指标卡（点击或回车翻面）" aria-label="' + esc(m.name) + '，' + (flipped ? '点击返回摘要' : '点击翻转查看系列说明与历史摘要') + '">' +
-      '<span class="mcard-inner"><span class="mface front"' + (flipped ? ' aria-hidden="true" inert' : '') + '>' +
-      '<span class="brow"><i class="dot" style="background:' + SERIES_COLORS[m.series] + '"></i>' + esc(m.series) + ' 系</span>' +
-      '<span class="mname">' + esc(m.name) + '</span>' +
-      '<span class="mrow">' + frontVal + '</span>' +
-      '<span class="mdelta">' + delta + '</span>' +
-      '<span class="mnote">' + (m.code === 'alc' ? 'W&W 核心序列；数值照抄报告原文。' : '数值照抄报告原文，不换算。') + '</span>' +
-      '<span class="mmeta">' + m.pts.length + ' 次记录 · ' + (latest ? fmtD(latest.d) : '—') + ' · ' + esc(latest ? (latest.lab || '') : '') + ' · 点开看趋势</span>' +
-      ldtTag +
-      '</span><span class="mface back"' + (flipped ? '' : ' aria-hidden="true" inert') + '>' +
-      '<span class="brow">' + esc(m.name) + ' · 最近 ' + backPts.length + ' 次</span>' +
-      backChart +
-      '<span class="mnote">' + esc(D.seriesNote[m.series] || '') + '</span>' +
-      '<span class="mmeta">单位 ' + esc(m.unit || '（描述）') + ' · 参考区间来源：报告单实验室区间为唯一显示口径 · 仅回顾已记录的值 · 点击返回</span>' +
-      '<span class="mmeta">' + esc(hist).slice(0, 120) + '</span>' +
-      '</span></span></button>';
+
+    var frontVal = m.qual
+      ? '<span class="mval-s">' + esc(latest ? latest.text : '还没有记录') + '</span>'
+      : (latest ? '<span class="mval">' + latest.v + '</span><span class="munit">' + esc(m.unit) + '</span>' : '<span class="mval-s">还没有记录</span>');
+
+    return '<button type="button" class="mcard' + (flipped ? ' is-flipped' : '') + '" role="group" data-act="flip" data-code="' + m.code + '"' +
+      ' aria-pressed="' + flipped + '" aria-roledescription="指标卡（点击或回车翻面）"' +
+      ' aria-label="' + esc(mShort(m)) + '，当前 ' + (latest ? latest.v + ' ' + m.unit : '无记录') + '，' + (flipped ? '点击返回摘要' : '点击翻面看趋势与口径') + '">' +
+      '<span class="mcard-inner">' +
+        '<span class="mface front"' + (flipped ? ' aria-hidden="true" inert' : '') + ' style="--soft:' + soft + '">' +
+          '<span class="mhead"><i class="dot" style="background:' + col + '"></i><span class="mseries">' + esc(m.series) + '</span>' +
+            '<span class="mcount">' + nums.length + ' 次</span></span>' +
+          '<span class="mname">' + esc(mShort(m)) + '</span>' +
+          '<span class="mrow">' + frontVal + '</span>' +
+          '<span class="mrow2">' + arrow + '</span>' +
+          '<span class="mfoot"><span class="mfoot-txt">' + (latest ? fmtD(latest.d) + ' · ' + esc(shortLab(latest.lab)) : '—') + '</span></span>' +
+          (ldtTag ? '<span class="mfoot-ldt">' + ldtTag + '</span>' : '') +
+          '<span class="mflip-hint">翻面 ›</span>' +
+        '</span>' +
+        '<span class="mface back"' + (flipped ? '' : ' aria-hidden="true" inert') + '>' +
+          '<span class="mhead"><i class="dot" style="background:' + col + '"></i><span class="mseries">' + esc(mShort(m)) + ' · 最近 12 次</span></span>' +
+          sparkSVG(m, 240, 96) +
+          '<span class="mfoot">全期 ' + (nums.length ? Math.min.apply(null, nums.map(function (p) { return p.v; })) + '–' + Math.max.apply(null, nums.map(function (p) { return p.v; })) + ' ' + esc(m.unit) : '—') + '</span>' +
+          '<span class="mnote">' + esc(D.seriesNote[m.series] || '') + '</span>' +
+          '<span class="mmeta">单位 ' + esc(m.unit || '（描述）') + ' · 参考区间以报告单实验室为准 · 点回去</span>' +
+        '</span>' +
+      '</span></button>';
   }
+
   function metricGroupsHTML(filter) {
     var all = metrics().filter(filter || function () { return true; });
     return D.SERIES_ORDER.map(function (s) {
       var ms = all.filter(function (m) { return m.series === s; });
       if (!ms.length) return '';
       var has = ms.filter(function (m) { return m.pts.length; }).length;
-      return '<section class="series-block"><h3 class="h3 series-title">' + s + '系 · ' + ms.length + ' 项 · 有记录 ' + has + ' 项</h3>' +
+      return '<section class="series-block"><h3 class="series-title"><i class="dot" style="background:' + (SERIES_COLORS[s] || '#2f5fa8') + '"></i>' +
+        s + '系列<span class="series-count">' + ms.length + ' 项 · 有记录 ' + has + ' 项</span></h3>' +
         '<div class="metric-grid">' + ms.map(metricCardHTML).join('') + '</div></section>';
     }).join('');
   }
@@ -496,32 +568,48 @@
       metricGroupsHTML();
   }
 
-  /* ---- 病情一图秀 onechart ---- */
+  /* ---- 病情一图秀 onechart（左栏控制 + 右栏图） ---- */
   function pageOnechart() {
     var st = state.chart;
     var ranges = [['3m', '近 3 月'], ['6m', '近 6 月'], ['12m', '近 12 月'], ['all', '全部']];
-    var head = pageHead('病情一图秀', '选几条线叠看',
-      '勾 1–4 项（按系列分组、独立滚动）；重绘只刷图区，翻面与焦点保留。图不判读（AI 无通道）。',
-      backHome() + '<button type="button" class="btn btn-primary" data-act="open-picker">指标选择窗口</button>');
-    var picker = '<dialog id="picker" class="modal"><div class="modal-head"><h2 class="h2">指标选择窗口（最多 4 条）</h2>' +
-      '<button type="button" class="btn" data-act="close-picker">关闭</button></div>' +
-      '<div class="picker-body">' + D.SERIES_ORDER.map(function (s) {
-        var ms = metrics().filter(function (m) { return m.series === s; });
-        return '<div class="picker-group"><h3 class="h3">' + s + '系</h3>' + ms.map(function (m) {
+    var head = pageHead('病情一图秀', '一图看变化',
+      '左边选时间与指标，右边即时重绘；每条线按自身范围缩放，不同指标数值不可比。图不判读。',
+      backHome());
+
+    /* 左栏：时间范围 chips + 分组指标勾选（即时更新）+ 显示开关 */
+    var groups = D.SERIES_ORDER.map(function (s) {
+      var ms = metrics().filter(function (m) { return m.series === s; });
+      return '<section class="pick-group"><h4 class="pick-group-head"><i class="dot" style="background:' + (SERIES_COLORS[s] || '#2f5fa8') + '"></i>' +
+        s + '系列</h4>' + ms.map(function (m) {
           var on = st.sel.indexOf(m.code) >= 0;
-          return '<label class="pick-item"><input type="checkbox" data-act="pick-metric" data-code="' + m.code + '"' + (on ? ' checked' : '') +
-            (m.qual ? ' data-qual="1"' : '') + '> ' + esc(mShort(m)) + ' <span class="muted">' + (m.qual ? '（描述性，不进折线）' : m.unit) + '</span></label>';
-        }).join('') + '</div>';
-      }).join('') + '</div>' +
-      '<p class="muted">已选 ' + st.sel.length + '/4；选满后需先去一条再选新的。</p></dialog>';
-    var body = '<section class="card"><div class="card-head"><h2 class="h2">叠看</h2>' +
-      '<div class="chips">' + ranges.map(function (r) {
-        return '<button type="button" class="chip" data-act="range" data-range="' + r[0] + '" aria-pressed="' + (st.range === r[0]) + '">' + r[1] + '</button>';
-      }).join('') +
-      '<button type="button" class="chip" data-act="tx-toggle" aria-pressed="' + st.tx + '">治疗条</button></div></div>' +
-      '<div id="chart-panel">' + chartSVG(st.sel, st.range, st.tx) + '</div>' +
-      '<p class="muted">已选 <b id="picker-count">' + st.sel.length + '</b>/4；选满后需先去一条再选新的。</p></section>';
-    return head + picker + body;
+          return '<label class="pick-row"><input type="checkbox" data-act="pick-metric" data-code="' + m.code + '"' + (on ? ' checked' : '') +
+            (m.qual ? ' data-qual="1"' : '') + '><span class="pick-name">' + esc(mShort(m)) + '</span>' +
+            '<span class="pick-unit">' + (m.qual ? '描述' : esc(m.unit)) + '</span></button></label>';
+        }).join('') + '</section>';
+    }).join('');
+
+    var aside = '<aside class="onechart-side" aria-label="一图秀控制">' +
+      '<section class="side-block"><h3 class="side-title">时间范围</h3>' +
+        '<div class="chips chips-wrap">' + ranges.map(function (r) {
+          return '<button type="button" class="chip" data-act="range" data-range="' + r[0] + '" aria-pressed="' + (st.range === r[0]) + '">' + r[1] + '</button>';
+        }).join('') + '</div></section>' +
+      '<section class="side-block"><h3 class="side-title">显示</h3>' +
+        '<label class="switch-row"><input type="checkbox" data-act="tx-toggle"' + (st.tx ? ' checked' : '') + '><span>治疗节点（独立泳道，不压曲线）</span></label>' +
+        '<label class="switch-row"><input type="checkbox" data-act="pin-toggle"' + (st.pinOn ? ' checked' : '') + '><span>点选读数（点图上的点显示数值与来源）</span></label>' +
+      '</section>' +
+      '<section class="side-block side-pick"><h3 class="side-title">指标（最多 4 条）<span class="side-count" id="picker-count">' + st.sel.length + '/4</span></h3>' +
+        '<div class="pick-scroll">' + groups + '</div>' +
+        '<p class="muted small">选满 4 条后需先去一条再选新的；描述性指标不进折线。</p></section>' +
+      '</aside>';
+
+    var legendNote = '<div class="chart-legend-note">图例里的区间是该指标<b>全部记录</b>的最小–最大，不是正常范围。</div>';
+    var body = '<div class="onechart-layout">' + aside +
+      '<section class="card onechart-main"><div class="card-head"><h2 class="h2">叠看</h2>' +
+      '<span class="muted small" id="chart-sub">已选 ' + st.sel.length + ' 条 · ' + (ranges.filter(function (r) { return r[0] === st.range; })[0] || ['', ''])[1] + '</span></div>' +
+      legendNote +
+      '<div id="chart-panel" aria-live="polite">' + chartSVG(st.sel, st.range, st.tx, st.pinOn ? st.pin : null) + '</div>' +
+      '</section></div>';
+    return head + body;
   }
 
   /* ---- 基因与预后档案 gene ---- */
@@ -798,8 +886,7 @@
         var on = state.flipped.has(code);
         el.setAttribute('aria-pressed', on);
         el.setAttribute('aria-label', on ? '点击返回摘要' : '点击翻转查看系列说明与历史摘要');
-        var inner = el.querySelector('.mcard-inner');
-        inner.style.transform = on ? 'rotateY(180deg)' : '';
+        el.classList.toggle('is-flipped', on);
         var f1 = el.querySelector('.mface.front'), f2 = el.querySelector('.mface.back');
         if (on) { f1.setAttribute('aria-hidden', 'true'); f1.setAttribute('inert', ''); f2.removeAttribute('aria-hidden'); f2.removeAttribute('inert'); }
         else { f2.setAttribute('aria-hidden', 'true'); f2.setAttribute('inert', ''); f1.removeAttribute('aria-hidden'); f1.removeAttribute('inert'); }
@@ -812,11 +899,21 @@
         $all('[data-act="range"]').forEach(function (c) { c.setAttribute('aria-pressed', c === el ? 'true' : 'false'); });
         redrawChart(); break;
       }
-      case 'tx-toggle': {
-        state.chart.tx = !state.chart.tx;
-        el.setAttribute('aria-pressed', state.chart.tx);
+      case 'pin-pt': {
+        if (!state.chart.pinOn) break;
+        var pcode = el.getAttribute('data-code'), pd = el.getAttribute('data-d');
+        var cur = state.chart.pin;
+        state.chart.pin = (cur && cur.code === pcode && cur.d === pd) ? null : { code: pcode, d: pd };
         redrawChart(); break;
       }
+      case 'pin-last': {
+        if (!state.chart.pinOn) { toast('先打开「点选读数」再点图例'); break; }
+        var lc = el.getAttribute('data-code'), lm = metricByCode(lc);
+        var lp = lm ? lm.pts.filter(function (p) { return typeof p.v === 'number'; }).slice(-1)[0] : null;
+        state.chart.pin = lp ? { code: lc, d: lp.d } : null;
+        redrawChart(); break;
+      }
+      case 'pin-clear': state.chart.pin = null; redrawChart(); break;
       case 'checkin-done':
         D.checkins.push({ d: '2026-10-25', state: '已服' });
         toast('已记录：今日已服（回到看板可从「今日」卡查看）'); render(); break;
@@ -903,8 +1000,12 @@
     }
   });
 
-  /* 复选（指标选择窗口）：上限不硬拒——回弹并提示 */
+  /* 复选（指标勾选即时更新）+ 显示开关 */
   document.addEventListener('change', function (e) {
+    var tx = e.target.closest('[data-act="tx-toggle"]');
+    if (tx) { state.chart.tx = tx.checked; redrawChart(); return; }
+    var pt = e.target.closest('[data-act="pin-toggle"]');
+    if (pt) { state.chart.pinOn = pt.checked; if (!pt.checked) state.chart.pin = null; redrawChart(); return; }
     var el = e.target.closest('[data-act="pick-metric"]');
     if (!el) return;
     var code = el.getAttribute('data-code');
@@ -940,9 +1041,14 @@
   function redrawChart() {
     /* 16 号：筛选变化只重绘 #chart-panel，不整页重渲染 */
     var panel = $('#chart-panel');
-    if (panel) panel.innerHTML = chartSVG(state.chart.sel, state.chart.range, state.chart.tx);
+    if (panel) panel.innerHTML = chartSVG(state.chart.sel, state.chart.range, state.chart.tx, state.chart.pinOn ? state.chart.pin : null);
     var cnt = $('#picker-count');
-    if (cnt) cnt.textContent = state.chart.sel.length;
+    if (cnt) cnt.textContent = state.chart.sel.length + '/4';
+    var sub = $('#chart-sub');
+    if (sub) {
+      var label = { '3m': '近 3 月', '6m': '近 6 月', '12m': '近 12 月', all: '全部' }[state.chart.range] || '全部';
+      sub.textContent = '已选 ' + state.chart.sel.length + ' 条 · ' + label;
+    }
   }
 
   /* ================= 启动 ================= */
