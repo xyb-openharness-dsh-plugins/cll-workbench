@@ -28,7 +28,25 @@
 | S11 | 叠看几条指标（一图秀） | 看板「一图秀」卡「病情一图秀（选几条线叠看）」 | 手＝**指标选择窗口**勾 1–4 项（按系列分组、独立滚动）→切时间窗/开关治疗条；AI＝无（图不判读） | 曲线重绘（只重绘 #chart-panel，翻面与焦点保留） | 原地停留 | 选满 4 条再选→提示；无数据系列→空态 |
 | S12 | 复诊准备包 | 看板「准备复诊」 | 选区间→勾线→生成 bundle + 问题清单（AI 起草 agent-draft 携带上下文） | 可导出包（private 三出口过滤） | 回首页 | 草稿不入库 |
 
-**覆盖自检（IP2）**：一级页 13；`(view, sub)` = `dash, ww, ww/trend, labs, labs/series, gene, gene/glossary, med, med/checkin, med/calendar, med/rx, ae, comorb, mrd, onechart, trial, trial/match, prep, docs, settings` = 20 条，每条至少被一条场景路径经过；**孤儿页 = 0**（labs 由 S1/S2、gene 由 S4、onechart 由 S11、trial 由 S5、docs 由 S12、settings 由全局入口经过）。M2 原型落地时按实现穷举复算。
+**覆盖自检（IP2 · G1 修订：一级 13 页穷举，(view,sub) 由一级页派生，孤儿页=0 可复算）**
+
+| 一级页（13） | 实现的 `(view, sub)` | 经过它的场景路径 |
+| --- | --- | --- |
+| 看板 | `dash` | S1/S3/S5/S6/S7/S8/S12 的入口卡 + S2 速览 |
+| 病情整理 | `records`, `records/docs` | S1（资料候选核对）/ S12（资料包引用） |
+| 观察与等待 | `ww` | S1（记一次血常规）/ S2（趋势与 LDT） |
+| 指标检测 | `labs` | S1（血象录入）/ S2（趋势）/ S11（进入选择） |
+| 病情一图秀 | `onechart` | S11 |
+| 基因与预后档案 | `gene` | S4 / S5（匹配输入） |
+| 口服药与治疗 | `med`, `med/checkin`, `med/calendar`, `med/rx`, `med/ae` | S6/S7/S8 |
+| 临床研究 | `trial`, `trial/match` | S5 |
+| 共病与在用药 | `comorb` | S9 |
+| 营养与感染预防 | `nutr` | S7（就诊要问语境）/ S12 |
+| 心理支持 | `mind` | S2（W&W 焦虑语境入口） |
+| 复诊准备 | `prep` | S3 / S12 |
+| 设置 | `settings` | 全局入口 |
+
+计数：一级页 **13**；`(view, sub)` 共 **19 条**（dash, records, records/docs, ww, labs, onechart, gene, med, med/checkin, med/calendar, med/rx, med/ae, trial, trial/match, comorb, nutr, mind, prep, settings），每条至少被一条场景路径经过；**孤儿页 = 0**。M2 原型落地时按实现穷举复算（IP2 判据）。
 
 ## 三、CRUD 双通道矩阵
 
