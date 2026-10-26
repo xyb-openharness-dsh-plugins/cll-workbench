@@ -65,12 +65,10 @@ test('⑥ index.html 只差版本占位与数据源引用', () => {
 test('⑦ 配色守住 taste app-screen 口径（chrome 中性 / 一处强调 / 扁平）', () => {
   const css = read('public/style.css')
   /* 底部/卡面为中性；强调色只落数据与主行动 */
-  /* 双色预算（用户 2026-10-26）：蓝=数据/选中，绿=状态与第二序列；底带一丝蓝绿的白 */
-  assert.match(css, /--ground:#f5f9f7/)
-  assert.match(css, /--chart-hue:#1d5fbf/)
-  assert.match(css, /--hue-green:#2e7d32/)
-  assert.match(css, /--soft-blue:#e6f0fa/)
-  assert.match(css, /--soft-green:#e6f4ec/)
+  /* 单主色 = 薄荷绿（用户 2026-10-26 定色）：数据/选中/状态正向同族，其余中性 */
+  assert.match(css, /--ground:#f4f9f6/)
+  assert.match(css, /--chart-hue:#178f6d/)
+  assert.match(css, /--soft-mint:#e0f2e9/)
   /* 卡片不得带阴影（扁平分隔靠 1px 边） */
   assert.doesNotMatch(css, /\.card\{[^}]*box-shadow/, '卡片带了阴影')
   /* 主行动用近黑，不用品牌色填充 */

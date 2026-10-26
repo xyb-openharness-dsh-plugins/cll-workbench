@@ -78,16 +78,16 @@
   function cbcAll() { return D.cbc.concat(state.extra.cbc).sort(function (a, b) { return a.d < b.d ? -1 : 1; }); }
   function metrics() { /* 与一图秀共用同一目录（23 号 A：单一来源） */
     var c = cbcAll(), b = D.biochem;
-    /* 每指标固定色：蓝族（血象）与绿族（生化）内用深浅区分；同一指标在任何页同一色 */
+    /* 每指标固定色：薄荷族（血象，深→浅）与青灰族（生化）；同一指标在任何页同一色 */
     return [
       { code: 'wbc', series: '血象', color: '#141414', name: '白细胞', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.wbc, lab: r.lab }; }) },
-      { code: 'alc', series: '血象', color: '#1d5fbf', name: '淋巴细胞绝对值（ALC）', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.alc, lab: r.lab }; }) },
-      { code: 'plt', series: '血象', color: '#5b8ac4', name: '血小板', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.plt, lab: r.lab }; }) },
-      { code: 'hgb', series: '血象', color: '#8fb0d9', name: '血红蛋白', unit: 'g/L', pts: c.map(function (r) { return { d: r.d, v: r.hgb, lab: r.lab }; }) },
-      { code: 'ldh', series: '生化', color: '#2e7d32', name: '乳酸脱氢酶（LDH）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.ldh, lab: r.lab }; }) },
-      { code: 'b2m', series: '生化', color: '#5da068', name: 'β2 微球蛋白', unit: 'mg/L', pts: b.map(function (r) { return { d: r.d, v: r.b2m, lab: r.lab }; }) },
-      { code: 'alt', series: '生化', color: '#8fbc97', name: '谷丙转氨酶（ALT）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.alt, lab: r.lab }; }) },
-      { code: 'crea', series: '生化', color: '#b5cfc0', name: '肌酐', unit: 'μmol/L', pts: b.map(function (r) { return { d: r.d, v: r.crea, lab: r.lab }; }) },
+      { code: 'alc', series: '血象', color: '#178f6d', name: '淋巴细胞绝对值（ALC）', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.alc, lab: r.lab }; }) },
+      { code: 'plt', series: '血象', color: '#58b394', name: '血小板', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.plt, lab: r.lab }; }) },
+      { code: 'hgb', series: '血象', color: '#93d1ba', name: '血红蛋白', unit: 'g/L', pts: c.map(function (r) { return { d: r.d, v: r.hgb, lab: r.lab }; }) },
+      { code: 'ldh', series: '生化', color: '#3d6b80', name: '乳酸脱氢酶（LDH）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.ldh, lab: r.lab }; }) },
+      { code: 'b2m', series: '生化', color: '#6f96a8', name: 'β2 微球蛋白', unit: 'mg/L', pts: b.map(function (r) { return { d: r.d, v: r.b2m, lab: r.lab }; }) },
+      { code: 'alt', series: '生化', color: '#a3c2cf', name: '谷丙转氨酶（ALT）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.alt, lab: r.lab }; }) },
+      { code: 'crea', series: '生化', color: '#c4d8e0', name: '肌酐', unit: 'μmol/L', pts: b.map(function (r) { return { d: r.d, v: r.crea, lab: r.lab }; }) },
       { code: 'mrd', series: '分子', name: 'MRD（流式）', unit: '%', pts: D.mrdSeries.map(function (m) { return { d: m.d, v: m.v, lab: m.lab }; }) },
       { code: 'exam', series: '体格', name: '淋巴结与脾脏评估', unit: '', qual: true, pts: D.exam.map(function (r) { return { d: r.d, v: null, text: r.text, lab: r.lab }; }) }
     ];
@@ -150,10 +150,9 @@
   var CHART_W = 760, CHART_H = 300, PAD = { l: 14, r: 74, t: 26, b: 34 };
   /* achromatic-ledger：全屏只有一个彩色，给"主数据元素"。血象是本病种的主线 → 取 #1d5fbf；
      其余序列用墨色与灰阶（不引入第二、第三个色相）。 */
-  /* 双色预算：蓝=血象（主），绿=生化（次）；分子/体格保持灰阶。
-     屏幕上永远只有蓝绿两族彩色，其余中性。 */
-  var SERIES_COLORS = { '血象': '#1d5fbf', '生化': '#2e7d32', '分子': '#8a8a8a', '体格': '#6b6b6b' };
-  var SERIES_SOFT = { '血象': '#e6f0fa', '生化': '#e6f4ec', '分子': '#f7f7f7', '体格': '#f7f7f7' };
+  /* 薄荷绿一族 = 血象（深→浅）；生化用青灰一族；分子/体格灰阶。彩色只有薄荷一族 + 青灰，不混第三族。 */
+  var SERIES_COLORS = { '血象': '#178f6d', '生化': '#3d6b80', '分子': '#8a8a8a', '体格': '#6b6b6b' };
+  var SERIES_SOFT = { '血象': '#e0f2e9', '生化': '#eef3f6', '分子': '#f7f7f7', '体格': '#f7f7f7' };
 
   function timeRange(range, anchorD) {
     var months = { '3m': 3, '6m': 6, '12m': 12 }[range] || 0;
@@ -551,24 +550,68 @@
         D.docs.map(function (d) {
           return '<tr><td>' + esc(d.name) + '</td><td>' + d.kind + '</td><td>' + d.d + '</td><td><span class="pill">' + d.state + '</span></td>' +
             '<td><button type="button" class="btn" data-act="view-doc">看原文</button></td></tr>';
-        }).join('') + '</tbody></table></div></section>';
+        }).join('') + '</tbody></table></div></section>' +
+        /* S1 示例：候选核对放资料夹（和文件同源），不再占病情档案首屏 */
+        '<section class="card"><div class="card-head"><h2 class="h2">候选核对（S1 示例）</h2>' + badge('AI 候选必经核对') + '</div>' +
+        '<p class="muted">来源：' + esc(D.pendingCandidate.src) + '</p>' +
+        '<table><thead><tr><th>日期</th><th>项目</th><th>值</th><th>单位</th><th>实验室原文</th><th>核对</th></tr></thead><tbody>' +
+        D.pendingCandidate.rows.map(function (r, i) {
+          return '<tr><td>' + r.d + '</td><td>' + esc(r.item) + '</td><td class="num">' + r.val + '</td><td>' + r.unit + '</td><td>' + esc(r.lab) + '</td>' +
+            '<td><button type="button" class="btn" data-act="cand-ok" data-i="' + i + '">确认</button> <button type="button" class="btn" data-act="cand-no" data-i="' + i + '">拒收</button></td></tr>';
+        }).join('') + '</tbody></table>' +
+        '<p class="muted">拒收候选零副作用；全部确认后 ALC 趋势新增一点。删除一律走「改这一条」。</p></section>';
       return html;
     }
+
+    /* 病情档案：4 枚胶囊 + 一条病情与治疗时间轴（先看结构，再读细节） */
     var p = D.profile;
-    var html = pageHead('病情整理', '我的淋·档案', '诊断与分期照抄报告原文，双轨并存不换算；判定归医生。', backHome() + aiBtn('帮我把档案里的分期和基因字段抄成一张就诊随身清单（只照抄）'));
-    html += '<section class="card"><div class="card-head"><h2 class="h2">确诊档案</h2>' + moreMenu([['edit-record', '改这一条']]) + '</div>' +
-      kvTable([['诊断名（照抄）', p.dxNameText], ['分期（双轨照抄）', p.stageText], ['诊断日期', p.dxDate], ['医院', p.hospital], ['当前医嘱状态', p.status], ['记录者', p.recorder]]) +
-      '</section>' +
-      '<section class="card"><div class="card-head"><h2 class="h2">候选核对（S1 示例）</h2>' + badge('AI 候选必经核对') + '</div>' +
-      '<p class="muted">来源：' + esc(D.pendingCandidate.src) + '</p>' +
-      '<table><thead><tr><th>日期</th><th>项目</th><th>值</th><th>单位</th><th>实验室原文</th><th>核对</th></tr></thead><tbody>' +
-      D.pendingCandidate.rows.map(function (r, i) {
-        return '<tr><td>' + r.d + '</td><td>' + esc(r.item) + '</td><td class="num">' + r.val + '</td><td>' + r.unit + '</td><td>' + esc(r.lab) + '</td>' +
-          '<td><button type="button" class="btn" data-act="cand-ok" data-i="' + i + '">确认</button> <button type="button" class="btn" data-act="cand-no" data-i="' + i + '">拒收</button></td></tr>';
-      }).join('') + '</tbody></table>' +
-      '<p class="muted">拒收候选零副作用；全部确认后 ALC 趋势新增一点。删除一律走「改这一条」。</p></section>';
+    var html = pageHead('病情整理', '病情档案', '诊断与分期照抄报告原文，双轨并存不换算；下面这条时间轴就是病历的骨架。', backHome() + aiBtn('帮我把档案里的分期和基因字段抄成一张就诊随身清单（只照抄）'));
+
+    /* 关键信息胶囊（≤4 枚：每枚一个事实，不装饰） */
+    var cur = (D.rxChanges || []).length ? '治疗中 · 泽布替尼' : '观察与等待';
+    html += '<div class="keypills" role="list" aria-label="关键信息">' +
+      '<span class="keypill" role="listitem"><i class="kp-dot" style="background:var(--chart-hue)"></i><b>' + esc((p.dxNameText || '').replace(/（.*?）/g, '')) + '</b><span>' + esc(p.dxDate) + ' 确诊</span></span>' +
+      '<span class="keypill" role="listitem"><b>Binet A / Rai 0</b><span>分期照抄</span></span>' +
+      '<span class="keypill" role="listitem"><i class="kp-dot" style="background:' + ((D.rxChanges || []).length ? 'var(--chart-hue)' : 'var(--chart-grey)') + '"></i><b>' + esc(cur) + '</b><span>当前医嘱</span></span>' +
+      '<span class="keypill" role="listitem"><b>1 线</b><span>治疗线数</span></span>' +
+      '</div>';
+
+    /* 病情与治疗时间轴 */
+    var events = buildCourseTimeline();
+    html += '<section class="card"><div class="card-head"><h2 class="h2">病情与治疗时间轴</h2>' +
+      '<span class="muted small">' + events.length + ' 个节点 · 每条带来源</span></div>' +
+      '<ol class="tl-v">' + events.map(function (e) {
+        return '<li class="tl-row"><span class="tl-date">' + esc(e.d) + '</span>' +
+          '<span class="tl-mark tl-' + e.kind + '" aria-hidden="true"></span>' +
+          '<div class="tl-body"><b>' + esc(e.text) + '</b>' +
+          (e.detail ? '<span class="tl-sub">' + esc(e.detail) + '</span>' : '') +
+          '<span class="tl-src">来源：' + esc(e.src) + '</span></div></li>';
+      }).join('') + '</ol>' +
+      '<p class="small-note">时间轴只记"发生了什么"；节点详情（方案依据、检测位点）在「口服药与治疗」页展开。</p></section>' +
+      '<section class="card"><div class="card-head"><h2 class="h2">档案字段（照抄）</h2>' + moreMenu([['edit-record', '改这一条']]) + '</div>' +
+      '<div class="fact-grid">' +
+      [['诊断名（照抄）', p.dxNameText, '诊断档案'], ['分期（双轨照抄）', p.stageText, '分期双轨'], ['医院', p.hospital, '诊断档案'], ['当前医嘱状态', p.status, '医嘱原文'], ['记录者', p.recorder, '本机']]
+        .map(function (r) { return '<dl><dt>' + esc(r[0]) + '</dt><dd><b>' + esc(r[1]) + '</b><span>' + esc(r[2]) + '</span></dd></dl>'; }).join('') +
+      '</div></section>';
     return html;
   }
+
+  /* 病情与治疗时间轴的数据：确诊 → 观察 → 起药 → 调整 → 化验里程碑，逐条带来源 */
+  function buildCourseTimeline() {
+    var out = [];
+    var p = D.profile;
+    out.push({ d: p.dxDate, kind: 'dx', text: '确诊 ' + ((p.dxNameText || '').replace(/（.*?）/g, '')), detail: p.stageText, src: '诊断报告' });
+    out.push({ d: p.dxDate, kind: 'phase', text: '进入观察与等待（Watch & Wait）', detail: '医嘱每 3 个月复查血常规，未用药', src: '医嘱原文' });
+    (D.rxChanges || []).forEach(function (r) {
+      out.push({ d: r.d, kind: 'med', text: (r.start ? '开始' : '调整') + (r.drug || '') + ' ' + (r.dose || ''), detail: r.reason || '', src: r.doc || '医嘱' });
+    });
+    (D.mrdSeries || []).forEach(function (m) {
+      out.push({ d: m.d, kind: 'lab', text: 'MRD（流式）：' + m.v + ' %', detail: '数值照抄报告；测不出 ≠ 体内无细胞', src: m.lab || '报告原文' });
+    });
+    out.sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+    return out;
+  }
+
   function kvTable(rows) {
     return '<table class="kv"><tbody>' + rows.map(function (r) { return '<tr><th>' + esc(r[0]) + '</th><td>' + (r[1] == null ? '' : esc(r[1])) + '</td></tr>'; }).join('') + '</tbody></table>';
   }

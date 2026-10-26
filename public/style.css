@@ -8,17 +8,16 @@
      规则：chrome 不含任何彩色；唯一的图表色 #1d5fbf 只给"主数据元素"；其余用墨色与灰阶。
      彩色像素目标 <1%。字体：系统 SF Pro（离线可用；本机无 Geist，且病历应用不依赖网络字体），
      数字用 SF Mono + tabular-nums，让化验值成列对齐（该样式的"账本"取向）。 */
-  /* 双色预算（用户 2026-10-26 指定浅绿+浅蓝）：
-     蓝 = 数据与选中；绿 = 状态（符合/正常）。底色带一丝蓝绿的白，卡面仍纯白。
-     除这两族外仍保持中性，避免回到彩虹图表。 */
-  --ground:#f5f9f7; --surface:#ffffff; --raised:#eef2ef; --active:#e3eef7;
+  /* 主色 = 薄荷绿（用户 2026-10-26 定色）：数据与选中用薄荷，状态同族正向绿，
+     其余中性。彩色一族 + 灰阶，不引入第二族色相。 */
+  --ground:#f4f9f6; --surface:#ffffff; --raised:#edf2ee; --active:#e0f2e9;
   --border:#e6e6e6; --rule:#f0f0f0; --control:#d4d4d4;
   --text:#0a0a0a; --muted:#6b6b6b; --faint:#8a8a8a;
   --accent:#141414;                 /* chrome 的"强调"= 墨色本身 */
-  --chart-hue:#1d5fbf;              /* 蓝：主数据线（血象） */
-  --hue-green:#2e7d32;              /* 绿：第二序列（生化）与正向状态 */
+  --chart-hue:#178f6d;              /* 薄荷绿：主数据线（血象）与选中态 */
+  --chart-hue-deep:#0e5c44;         /* 文字级薄荷（≥7:1） */
   --chart-ink:#141414; --chart-grey:#8a8a8a;
-  --soft-blue:#e6f0fa; --soft-green:#e6f4ec;
+  --soft-mint:#e0f2e9;
   --positive:#2e7d32; --negative:#c4242a; --warning:#92400e;
   --pill-positive-bg:#e6f4ec; --pill-positive-ink:#1c5c34;
   --pill-negative-bg:#ffedea; --pill-negative-ink:#831c1e;
@@ -538,3 +537,34 @@ dialog.modal::backdrop{background:rgba(10,10,10,.38)}
 .track-row:last-child{border-bottom:0}
 .track-row .date{flex:0 0 84px; color:var(--muted); font-size:11.5px}
 .track-row small{display:block; font-size:11px; color:var(--muted)}
+
+/* ---------- 病情档案：关键胶囊 + 竖向时间轴 ---------- */
+.keypills{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px}
+.keypill{
+  display:inline-flex; align-items:baseline; gap:7px; padding:8px 14px;
+  border:1px solid var(--border); border-radius:999px; background:var(--surface);
+  font-size:13px; min-width:0;
+}
+.keypill b{font-weight:600; color:var(--text); white-space:nowrap}
+.keypill span{color:var(--muted); font-size:12px; white-space:nowrap}
+.kp-dot{width:8px; height:8px; border-radius:50%; flex:none; align-self:center}
+
+/* 竖向时间轴：日期列 + 节点标记列 + 正文列；竖线贯穿节点列 */
+.tl-v{list-style:none; margin:0; padding:0}
+.tl-row{display:grid; grid-template-columns:76px 18px minmax(0,1fr); gap:0 12px; padding:0 0 18px; position:relative}
+.tl-row:last-child{padding-bottom:2px}
+.tl-date{font-family:var(--font-mono); font-size:12px; color:var(--muted); padding-top:2px; text-align:right; font-variant-numeric:tabular-nums}
+.tl-mark{width:12px; height:12px; border-radius:50%; margin-top:3px; justify-self:center; position:relative; z-index:1; background:var(--surface)}
+.tl-row::before{
+  content:""; position:absolute; left:calc(76px + 12px + 9px); top:6px; bottom:-4px;
+  width:1px; background:var(--border);
+}
+.tl-row:last-child::before{display:none}
+.tl-dx{border:2px solid var(--text)}
+.tl-phase{border:2px dashed var(--control)}
+.tl-med{background:var(--chart-hue); border:2px solid var(--chart-hue)}
+.tl-lab{background:var(--muted)}
+.tl-body{min-width:0}
+.tl-body b{display:block; font-weight:600; color:var(--text); font-size:14px; line-height:1.45}
+.tl-sub{display:block; font-size:12.5px; color:var(--ink-2); margin-top:2px; line-height:1.5}
+.tl-src{display:block; font-size:11.5px; color:var(--faint); margin-top:3px}
