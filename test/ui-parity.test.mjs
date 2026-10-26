@@ -42,18 +42,35 @@ test('⑤ 图表硬纪律：SVG 根 class="chart" + Fritsch–Carlson 在两侧�
   }
 })
 
-test('⑤b 安装版不得残留演示 AI 会话框（无自绘输入框/发送按钮）', () => {
+test('⑤b 安装版不得自绘任何 AI 会话 UI（会话归宿主外壳）', () => {
   const html = read('public/index.html')
+  const app = read('public/app.js')
+  /* 演示期的输入框/日志/假发送按钮 */
   assert.doesNotMatch(html, /id="aiPrompt"/, '仍有演示输入框')
   assert.doesNotMatch(html, /id="agentLog"/, '仍有演示日志区')
   assert.doesNotMatch(html, /data-act="ai-send"/, '仍有假发送按钮')
-  /* 必须留出宿主原生会话的挂载点 */
-  assert.match(html, /id="agent-mount"/)
-  /* 独立打开时如实说明，而不是显示一个假聊天框 */
-  assert.match(html, /id="agent-standalone"/)
+  /* 页面内不再有会话列/开关/分隔条：原生会话由 lib/client.js 外壳提供 */
+  assert.doesNotMatch(html, /class="session"|id="agent-splitter"|id="agent-toggle"/, '页面仍自绘会话区')
+  assert.doesNotMatch(app, /agentShellWire|setSessionOpen/, '仍含页面级会话开关逻辑')
+  /* 顶栏只有一个「和 AI 讨论」，点击发到原生会话 */
+  assert.match(html, /data-act="discuss"/)
+  assert.match(app, /window\.parent\.postMessage\(/)
 })
 
 test('⑥ index.html 只差版本占位与数据源引用', () => {
   const strip = (h) => h.replace(/v0\.\d+\.\d+/g, 'vX').replace(/\s+/g, '')
   assert.equal(strip(read('public/index.html')), strip(read('prototypes/v0.1/index.html')))
+})
+
+test('⑦ 配色守住 taste app-screen 口径（chrome 中性 / 一处强调 / 扁平）', () => {
+  const css = read('public/style.css')
+  /* 底部/卡面为中性；强调色只落数据与主行动 */
+  assert.match(css, /--ground:#f9fafb/)
+  assert.match(css, /--accent:#1f4f8f/)
+  /* 卡片不得带阴影（扁平分隔靠 1px 边） */
+  assert.doesNotMatch(css, /\.card\{[^}]*box-shadow/, '卡片带了阴影')
+  /* 主行动用近黑，不用品牌色填充 */
+  assert.match(css, /\.btn-primary\{background:var\(--ink\)/)
+  /* 导航激活项用中性灰，不用品牌色 */
+  assert.match(css, /\.sidebar a\[aria-current="page"\]\{[^}]*background:var\(--active\)/)
 })

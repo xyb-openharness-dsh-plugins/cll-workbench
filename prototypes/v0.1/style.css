@@ -4,21 +4,32 @@
    窄宽两版（30 号第一版）：≥980px 三栏 / <980px 堆叠。 */
 
 :root{
-  /* 中性层 */
-  --paper:#f9f8fc; --surface:#ffffff;
-  --ink:#2c2a3a; --ink-2:#4c4960; --muted:#7c7992;
-  /* 品牌三档（soft 永远可当背景 / deep 永远可当正文色） */
-  --brand-soft:#efedf8; --brand:#8f8ac9; --brand-deep:#4a4494;
-  /* 行动色（与品牌分离的暖色） */
-  --action:#a8560f; --action-hover:#8d4708;
-  /* 语义色 */
-  --ok:#2f7d4f; --ok-bg:#e8f5ec; --warn:#8a6210; --warn-bg:#fdf3dd;
-  --grey:#5f5c72; --grey-bg:#eeedf3;
-  /* 结构 */
-  --line:#e3e1ee; --line-strong:#cfcbe4;
-  --radius:16px; --radius-sm:10px;
-  --shadow:0 1px 2px rgba(74,68,148,.05),0 6px 18px rgba(74,68,148,.06);
-  --font:15px;
+  /* ---- Taste Seed（app screen 口径）----
+     色彩只落在数据与状态上：界面底/卡/线全中性，一个强调色给"主数据元素"，状态色只在状态上。
+     对比度：正文/次级均 ≥4.5:1；占位用 --faint。 */
+  --ground:#f9fafb; --surface:#ffffff; --raised:#f9f9f9; --active:#eeeeee;
+  --border:#e8e8e8; --rule:#f2f2f2; --control:#d1d5db;
+  --ink:#111111; --ink-2:#3a3b3b; --muted:#5f6368; --faint:#6b6b6b;
+  /* 强调色：只给一个（主数据线 / 主行动），不铺在 chrome 上 */
+  --accent:#1f4f8f; --accent-soft:#eef3fa;
+  /* 状态：文字用深色保证 4.5:1，药丸用浅底深字 */
+  --ok:#247b50; --ok-bg:#dcfae5; --ok-ink:#04250e;
+  --warn:#92400e; --warn-bg:#fffbeb; --warn-ink:#92400e; --warn-border:#fde68a;
+  --danger:#c4242a; --danger-bg:#ffedea; --danger-ink:#831c1e;
+  --grey:#5f6368; --grey-bg:#f1f3f4;
+  /* 结构：扁平优先，只有浮层用阴影 */
+  --radius-card:8px; --radius-control:6px; --radius-chip:4px;
+  --shadow-float:0 6px 20px rgba(17,17,17,.10);
+  --grid-line:#e5e5e5;
+
+  /* 兼容旧类名的别名（同一套颜色，避免两套色） */
+  --paper:var(--ground); --line:var(--border); --line-strong:var(--control);
+  --brand:var(--accent); --brand-deep:var(--accent); --brand-soft:var(--accent-soft);
+  --action:var(--accent); --action-hover:#173d70;
+  --radius:var(--radius-card); --radius-sm:var(--radius-control);
+  --shadow:none;
+
+  --font:14px;
 }
 
 *{box-sizing:border-box}
@@ -55,117 +66,68 @@ h1{font-size:clamp(24px,2.2vw,30px); letter-spacing:-.01em}
 /* ---------- 三栏布局（≥980px） ---------- */
 .app{
   flex:1 0 auto; display:grid; gap:0; align-items:stretch;
-  /* 会话宽度走变量（25%–45%，默认 35%）：收起时归 0，主图自动吃满 */
-  grid-template-columns:220px minmax(0,1fr) 6px var(--agent-col, 35%);
+  /* 两栏：导航 + 画布。原生会话由宿主外壳提供，不在业务页面内占列 */
+  grid-template-columns:224px minmax(0,1fr);
 }
-body[data-session="closed"] .app{grid-template-columns:220px minmax(0,1fr)}
-body[data-session="closed"] .session,body[data-session="closed"] .agent-splitter{display:none!important}
-.agent-splitter{
-  cursor:col-resize; background:transparent; border-left:1px solid var(--line);
-  position:relative; touch-action:none;
-}
-.agent-splitter::after{
-  content:""; position:absolute; inset:0 2px; border-radius:2px; background:transparent; transition:background .14s;
-}
-.agent-splitter:hover::after,.agent-splitter:focus-visible::after{background:var(--brand-soft)}
-.btn-ai-toggle{display:inline-flex; align-items:center; gap:6px}
-.btn-ai-toggle .ic{width:16px; height:16px; flex:none}
-.btn-ai-toggle[data-state="collapsed"]{background:var(--brand-soft); border-color:var(--brand); color:var(--brand-deep); font-weight:600}
-.sidebar{padding:18px 12px; border-right:1px solid var(--line)}
-.sidebar ul{list-style:none; padding:0; margin:0}
+.sidebar{padding:16px 10px; border-right:1px solid var(--border); background:var(--ground)}
+.sidebar ul{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px}
 .sidebar a{
-  display:block; padding:8px 10px; border-radius:8px; color:var(--ink-2);
-  text-decoration:none; font-size:13px; border-left:3px solid transparent;
+  display:block; padding:7px 12px; border-radius:var(--radius-control); color:var(--ink-2);
+  text-decoration:none; font-size:14px; min-height:34px; line-height:20px;
 }
-.sidebar a:hover{background:var(--brand-soft)}
-.sidebar a[aria-current="page"]{color:var(--brand-deep); font-weight:600; background:var(--brand-soft); border-left-color:var(--brand-deep)}
+.sidebar a:hover{background:#f0f1f2}
+/* 导航退到后面：激活项只用中性灰 pill，不用品牌色和左侧色条 */
+.sidebar a[aria-current="page"]{color:var(--ink); font-weight:600; background:var(--active)}
 .nav-note{margin-top:auto; padding-top:18px; font-size:12.5px; color:var(--muted)}
 .main-col{min-width:0; display:flex}
 #view{max-width:1080px; width:100%; margin:0 auto; padding:24px 28px 44px; outline:none}
 
-/* ---------- AI 会话区 ---------- */
-.session{border-left:1px solid var(--line); background:var(--surface); padding:14px 14px 16px; display:flex; flex-direction:column; gap:8px; min-width:0; overflow:auto}
-/* 原生会话挂载点：装进 Desktop 时由宿主注入会话节点（页面不自绘聊天框） */
-.agent-mount{display:flex; flex-direction:column; min-height:0; flex:1}
-.agent-mount:empty{display:none}
-.agent-standalone{display:flex; flex-direction:column; gap:8px; padding:12px; border:1px dashed var(--line-strong); border-radius:var(--radius-sm); background:var(--paper); font-size:12.5px}
-.agent-standalone p{margin:0; color:var(--ink-2)}
-.agent-standalone[hidden]{display:none}
-.session-body textarea{
-  width:100%; border:1px solid var(--line-strong); border-radius:var(--radius-sm);
-  padding:8px 10px; font:inherit; font-size:12.5px; resize:vertical;
-}
-.agent-log{
-  background:var(--grey-bg); border-radius:var(--radius-sm); padding:10px;
-  font-size:12.5px; white-space:pre-wrap; word-break:break-all; max-height:220px; overflow:auto; margin:.2em 0;
-}
-.field-label{font-size:12.5px; color:var(--ink-2)}
 
-/* ---------- 页脚贴底 ---------- */
-.footer{
-  margin-top:auto; display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:center;
-  padding:14px 20px; border-top:1px solid var(--line); background:var(--surface);
-  font-size:12.5px; color:var(--muted);
-}
-
-/* ---------- 卡片与页头 ---------- */
-.page-head{margin-bottom:16px}
-.eyebrow{font-size:12.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--brand-deep); margin:0}
-.ph-row{display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap}
-.page-desc{max-width:62ch; color:var(--ink-2); font-size:13px; margin:.3em 0}
-.actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+/* ---------- 基础组件（Taste app-screen：扁平、1px 边、无阴影、控高 32px） ---------- */
 .card{
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-  padding:18px 20px; margin-bottom:16px; box-shadow:var(--shadow); min-width:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card);
+  padding:16px 18px; margin-bottom:14px; min-width:0;
 }
-.card-head{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px}
+.card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px}
 .card-head .h2{margin:0}
-.row{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0}
-
-/* ---------- 按钮与 chips ---------- */
 .btn{
-  font:inherit; font-size:13px; padding:7px 14px; min-height:44px; cursor:pointer;
-  border:1px solid var(--line-strong); border-radius:var(--radius-sm);
-  background:var(--surface); color:var(--ink); transition:background .16s,border-color .16s;
-  display:inline-flex; align-items:center; gap:4px;
+  display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:5px 12px;
+  border:1px solid var(--control); border-radius:var(--radius-control);
+  background:var(--surface); color:var(--ink); font:inherit; font-size:13px; cursor:pointer;
+  transition:background .14s, border-color .14s;
 }
-.btn:hover{border-color:var(--brand); transform:translateY(-2px); box-shadow:var(--shadow)}
-.btn-primary{background:var(--action); border-color:var(--action); color:#fff}
-.btn-primary:hover{background:var(--action-hover)}
-.btn-ai{border-style:dashed; border-color:var(--brand); color:var(--brand-deep)}
-.btn[disabled]{opacity:.5; cursor:not-allowed}
-.chips{display:flex; gap:6px; flex-wrap:wrap}
-.chip{
-  font:inherit; font-size:12.5px; padding:5px 12px; border-radius:20px; cursor:pointer; min-height:44px;
-  border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-2);
-}
-.chip[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink)}
+.btn:hover{background:var(--raised)}
+.btn:disabled{opacity:.55; cursor:not-allowed}
+/* 主行动：近黑填充（taste §4.3 / §8.3），不铺品牌色 */
+.btn-primary{background:var(--ink); border-color:var(--ink); color:#fff; font-weight:600}
+.btn-primary:hover{background:#000; border-color:#000}
+.btn-quiet{border-color:transparent; background:transparent; color:var(--muted); padding:4px 8px; min-height:28px}
+.btn-quiet:hover{background:var(--raised); color:var(--ink)}
+.btn-ai{border-color:var(--control); background:var(--surface)}
+.discuss-btn,.btn-discuss-top{border-color:var(--control)}
 .pill{
-  display:inline-block; border-radius:20px; padding:1px 10px; font-size:12.5px;
-  background:var(--brand-soft); color:var(--brand-deep); border:1px solid var(--line-strong);
+  display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:var(--radius-chip);
+  font-size:11.5px; font-weight:500; background:var(--grey-bg); color:var(--grey);
+  border:1px solid transparent; white-space:nowrap; flex:none;
 }
-.pill.ok{background:var(--ok-bg); color:var(--ok)}
-.pill.warn{background:var(--warn-bg); color:var(--warn)}
+.pill.ok{background:var(--ok-bg); color:var(--ok-ink)}
+.pill.warn{background:var(--warn-bg); color:var(--warn-ink); border-color:var(--warn-border)}
+.pill.no{background:var(--danger-bg); color:var(--danger-ink)}
 .pill.grey{background:var(--grey-bg); color:var(--grey)}
-
-/* ---------- 表格 ---------- */
-.table-wrap{overflow-x:auto; min-width:0}
-table{border-collapse:collapse; width:100%; font-size:13px}
-th{font-size:12.5px; color:var(--muted); font-weight:400; text-align:left; border-bottom:1px solid var(--line-strong); padding:6px 8px}
-td{border-bottom:1px solid var(--line); padding:8px; vertical-align:top; min-width:0}
-table.kv th{width:34%; color:var(--ink-2)}
-q.quote{color:var(--ink-2); font-style:normal}
-.src{color:var(--muted); font-size:12.5px}
-
-/* ---------- 表单（≤6 字段）与键盘组件 ---------- */
-.form5,.form6{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; margin-top:10px; padding:12px; border:1px dashed var(--line-strong); border-radius:var(--radius-sm)}
-.f{display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--ink-2); min-width:0}
-.f input,.f select{
-  font:inherit; font-size:13px; padding:7px 8px; min-height:44px; min-width:0;
-  border:1px solid var(--line-strong); border-radius:8px; background:var(--surface);
+.pill.plain{background:var(--surface); border-color:var(--border); color:var(--muted)}
+.notice{
+  padding:10px 14px; margin:0 0 14px; border-radius:var(--radius-control);
+  background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn-ink); font-size:13px;
 }
-.keypad{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; padding:8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--brand-soft)}
-.kb{min-width:52px; justify-content:center}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.table-wrap{overflow-x:auto; min-width:0}
+table{width:100%; border-collapse:collapse; font-size:13px}
+th{font-size:12px; font-weight:400; color:var(--muted); text-align:left; padding:8px 10px; border-bottom:1px solid var(--border)}
+td{padding:8px 10px; border-bottom:1px solid var(--rule)}
+th.num,td.num{text-align:right; font-variant-numeric:tabular-nums}
+.switch-row{display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--ink-2)}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px}
+.timeline{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px}
 
 /* ---------- 看板入口卡 ---------- */
 .dash-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px}
@@ -224,7 +186,9 @@ q.quote{color:var(--ink-2); font-style:normal}
 .mfoot{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:auto; flex-wrap:nowrap; min-width:0}
 .mfoot-txt{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mfoot-ldt{display:flex}
-.mflip-hint{position:absolute; right:10px; top:11px; font-size:10.5px; color:var(--brand-deep); opacity:.5; white-space:nowrap}
+.mflip-hint{position:absolute; right:10px; bottom:8px; font-size:10.5px; color:var(--faint); opacity:.75; white-space:nowrap}
+.mfoot{padding-right:0}
+.mcount{color:var(--muted); font-size:11.5px}
 .mnote{font-size:12px; color:var(--muted); line-height:1.45}
 .mmeta{font-size:11.5px; color:var(--muted); line-height:1.4}
 .ldt-chip{

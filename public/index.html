@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.7.0</title>
+<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.8.0</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,15 +12,11 @@
 
 <!-- 顶栏：品牌一步回首页；版本常显；AI 会话区开关 -->
 <header class="topbar">
-  <a class="brand" href="#dash">小淋宝 LymPal <span class="ver">v0.7.0</span></a>
+  <a class="brand" href="#dash">小淋宝 LymPal <span class="ver">v0.8.0</span></a>
   <div class="topbar-right">
-    <span class="conn" id="agent-note">原型演示：独立启动无原生会话</span>
-    <button type="button" class="btn btn-ai-toggle" id="agent-toggle" data-act="agent-toggle"
-            data-state="open" aria-controls="session" aria-expanded="true"
-            aria-label="AI 对话：收起 AI 对话">
-      <svg class="ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4h12v8H8l-4 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-      <span id="agent-label">收起 AI 对话</span>
-    </button>
+    <span class="conn" id="agent-note">AI 对话在右侧原生会话</span>
+    <button type="button" class="btn btn-discuss-top" data-act="discuss"
+            aria-label="和 AI 讨论：把本页关键信息发到 AI 对话">和 AI 讨论</button>
   </div>
 </header>
 
@@ -50,29 +46,11 @@
     <main id="view" tabindex="-1" aria-live="polite"></main>
   </div>
 
-  <!-- AI 会话区：装进 DSH Desktop 时这里挂宿主原生会话（由 lib/client.js 注入）。
-       本文件不画聊天框、不存提示词、不发请求——避免出现"看起来能用其实不会发"的假界面。 -->
-  <div class="agent-splitter" id="agent-splitter" role="separator" aria-orientation="vertical"
-       aria-label="调整 AI 对话栏宽度" aria-valuemin="25" aria-valuemax="45" aria-valuenow="35" tabindex="0"></div>
-
-  <aside class="session" id="session" aria-label="AI 对话（宿主原生会话）">
-    <div class="session-head"><strong>AI 对话（宿主原生会话）</strong></div>
-    <div class="session-body">
-      <div id="agent-mount" class="agent-mount"></div>
-      <div id="agent-standalone" class="agent-standalone">
-        <p>当前是**独立打开**（没有 DSH Desktop 宿主），因此没有可用的原生会话。</p>
-        <p>装进 Desktop 后，本区显示宿主自己的对话窗口；页面上的「和 AI 讨论」会把本页关键信息直接发到那里。</p>
-        <p class="muted">业务记录与整理不依赖会话，照常可用。</p>
-      </div>
-      <h3 class="h3">隐私三出口</h3>
-      <p class="muted">导出 / AI 上下文 / 摘要统一经过 <code>filterPrivate(list, exit)</code>；<code>visibility="private"</code> 的条目（情绪记录、私密副作用）默认不进导出与 AI；导出对 private 字段打码（●●）。</p>
-    </div>
-  </aside>
 </div>
 
 <!-- 页脚贴底：flex column + min-height:100vh；版本 + (view,sub) 计数常显 -->
 <footer class="footer">
-  <span>小淋宝 LymPal <b class="ver">v0.7.0</b></span>
+  <span>小淋宝 LymPal <b class="ver">v0.8.0</b></span>
   <span>构建日：2026-10-25</span>
   <span>一级页 13 · (view,sub) <b id="view-sub-count">19</b></span>
   <span>数据目录：~/LymPal/病历资料 · 已挂载（本机，演示只读）</span>

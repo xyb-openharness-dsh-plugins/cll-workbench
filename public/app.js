@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.7.0' };
+  var APP_INFO = { version: '0.8.0' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
@@ -79,8 +79,6 @@
     flipped: new Set(),          /* 指标卡翻面，存 key（27 号：状态存 key 不存 DOM） */
     chart: { sel: ['alc', 'hgb'], range: 'all', tx: true, pin: null, pinOn: true }, /* 一图秀 */
     asked: {},                   /* 触发词表勾选"我想问的" */
-    sessionOpen: true,           /* AI 对话栏开合（收起只隐藏，不结束会话） */
-    agentWidth: 0.35,            /* 会话列宽（25%–45%，默认 35%） */
     onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
     trialFilter2: { q: '', scope: 'all', status: 'all' }, /* 检索页筛选 */
     trialPrefs: { biopsy: false, placebo: false, city: 'all' }, /* 我的偏好：不参与医学判断 */
@@ -174,8 +172,10 @@
 
   /* ================= SVG 折线图（根 class="chart"；每条线按自身全期范围缩放） ================= */
   var CHART_W = 760, CHART_H = 300, PAD = { l: 14, r: 74, t: 26, b: 34 };
-  var SERIES_COLORS = { '血象': '#2f5fa8', '生化': '#7a5aa0', '分子': '#a8642f', '体格': '#4a7d5e' };
-  var SERIES_SOFT = { '血象': '#e8eef8', '生化': '#efeaf6', '分子': '#f8efe6', '体格': '#e9f2ec' };
+  /* taste §6.4：一个主体一个色相。四条线用同一蓝的深浅 + 中性灰组合，
+     既保证可辨识，又不让屏幕出现四五种无关色相；强调色只落在"血象"（主数据线）。 */
+  var SERIES_COLORS = { '血象': '#1f4f8f', '生化': '#5b7fae', '分子': '#8fa8c9', '体格': '#6b7280' };
+  var SERIES_SOFT = { '血象': '#eef3fa', '生化': '#f4f6f9', '分子': '#f8f9fb', '体格': '#f3f4f6' };
 
   function timeRange(range, anchorD) {
     var months = { '3m': 3, '6m': 6, '12m': 12 }[range] || 0;
@@ -457,11 +457,9 @@
 
   /* ================= 通用小组件 ================= */
   function pageHead(eyebrow, title, desc, actions) {
-    /* IP11（脚手架标准）：每页标题行常驻「和 AI 讨论」，点击拉起对话栏并携带本页关键信息（不代发） */
-    var discuss = '<button type="button" class="btn discuss-btn" data-act="discuss" ' +
-      'aria-label="和 AI 讨论本页内容（拉起 AI 对话栏并携带本页关键信息，不自动发送）">和 AI 讨论</button>';
+    /* 「和 AI 讨论」在顶栏常驻一个（全局，随当前页变化），页头不再重复第二个同功能按钮 */
     return '<header class="page-head"><p class="eyebrow">' + esc(eyebrow) + '</p><div class="ph-row"><h1>' + esc(title) + '</h1>' +
-      '<div class="actions">' + discuss + (actions || '') + '</div></div><p class="page-desc">' + desc + '</p></header>';
+      '<div class="actions">' + (actions || '') + '</div></div><p class="page-desc">' + desc + '</p></header>';
   }
 
   /* 本页关键信息（discussFacts）：事实陈述、无判定词、按页给不同事实摘要 */
@@ -1285,11 +1283,6 @@
         agentDraft(draft, { autoSubmit: true });
         break;
       }
-      case 'agent-toggle': {
-        /* 顶栏 AI 对话按钮：五态里本页只做 打开/收起（独立启动无原生会话，显示暂不可用态文案） */
-        setSessionOpen(!state.sessionOpen);
-        break;
-      }
       case 'checkin-done':
         D.checkins.push({ d: '2026-10-25', state: '已服' });
         toast('已记录：今日已服（回到看板可从「今日」卡查看）'); render(); break;
@@ -1363,7 +1356,6 @@
         break;
       }
       case 'kb-close': { var kp = el.closest('.keypad'); if (kp) kp.setAttribute('hidden', ''); break; }
-      case 'panel-toggle': setSessionOpen(!state.sessionOpen); break;
     }
   });
 
@@ -1431,70 +1423,6 @@
     }
   });
 
-  /* AI 对话栏开合（五态文案沿用家族：AI 对话 / 打开 / 收起 / 暂不可用）。
-     收起只切 hidden 与按钮文案，不结束、不清空会话——草稿与筛选原样保留。 */
-  function agentLabelText() {
-    if (state.sessionOpen) return '收起 AI 对话';
-    return '打开 AI 对话';
-  }
-  function refreshAgentChrome() {
-    var btn = $('#agent-toggle');
-    var label = $('#agent-label');
-    var session = $('#session');
-    var splitter = $('#agent-splitter');
-    if (session) session.hidden = !state.sessionOpen;
-    if (btn) {
-      btn.setAttribute('aria-expanded', String(state.sessionOpen));
-      btn.dataset.state = state.sessionOpen ? 'open' : 'collapsed';
-    }
-    if (label) label.textContent = agentLabelText();
-    if (btn) btn.setAttribute('aria-label', 'AI 对话：' + agentLabelText());
-    if (splitter) splitter.hidden = !state.sessionOpen;
-  }
-  var AGENT_KEY = 'lymPal.agent-pane.v1';
-  var AGENT = { min: 0.25, max: 0.45, def: 0.35, step: 0.02 };
-  function agentWidthApply(w) {
-    var clamped = Math.min(AGENT.max, Math.max(AGENT.min, Number(w) || AGENT.def));
-    state.agentWidth = Math.round(clamped * 10000) / 10000;
-    document.body.style.setProperty('--agent-col', Math.round(state.agentWidth * 100) + '%');
-    var sp = $('#agent-splitter');
-    if (sp) sp.setAttribute('aria-valuenow', String(Math.round(state.agentWidth * 100)));
-    try { localStorage.setItem(AGENT_KEY, JSON.stringify({ width: state.agentWidth })); } catch (e) { /* 隐私模式忽略 */ }
-    if (state.route.view === 'onechart') applyOnechartLayout();
-  }
-  function agentShellWire() {
-    var sp = $('#agent-splitter');
-    if (!sp) return;
-    try {
-      var saved = JSON.parse(localStorage.getItem(AGENT_KEY) || 'null');
-      if (saved && isFinite(saved.width)) { state.agentWidth = saved.width; document.body.style.setProperty('--agent-col', Math.round(saved.width * 100) + '%'); }
-    } catch (e) { /* 坏值忽略 */ }
-    var host = null;
-    sp.addEventListener('pointerdown', function (e) { e.preventDefault(); host = $('#app'); sp.setPointerCapture(e.pointerId); });
-    sp.addEventListener('pointermove', function (e) {
-      if (!host) return;
-      var r = host.getBoundingClientRect();
-      if (!r.width) return;
-      agentWidthApply((r.right - e.clientX) / r.width);
-    });
-    sp.addEventListener('pointerup', function () { host = null; });
-    sp.addEventListener('pointercancel', function () { host = null; });
-    sp.addEventListener('keydown', function (e) {
-      var d = { ArrowLeft: AGENT.step, ArrowRight: -AGENT.step }[e.key];
-      if (d !== undefined) { e.preventDefault(); agentWidthApply((state.agentWidth || AGENT.def) + d); return; }
-      if (e.key === 'Home') { e.preventDefault(); agentWidthApply(AGENT.max); }
-      if (e.key === 'End') { e.preventDefault(); agentWidthApply(AGENT.min); }
-    });
-  }
-
-  function setSessionOpen(open) {
-    state.sessionOpen = !!open;
-    document.body.setAttribute('data-session', state.sessionOpen ? 'open' : 'closed');
-    refreshAgentChrome();
-    /* 开合后重算一图秀布局（主图优先，不被左栏挤压） */
-    if (state.route.view === 'onechart') applyOnechartLayout();
-  }
-
   function redrawChart() {
     /* 16 号：筛选变化只重绘 #chart-panel，不整页重渲染 */
     var panel = $('#chart-panel');
@@ -1513,20 +1441,12 @@
   window.addEventListener('resize', function () { if (state.route.view === 'onechart') applyOnechartLayout(); });
   window.addEventListener('DOMContentLoaded', function () {
     $('#view-sub-count').textContent = VIEW_SUBS.length; /* 自检计数（页脚常显） */
-    document.body.setAttribute('data-session', state.sessionOpen ? 'open' : 'closed');
-    agentShellWire();
-    /* 无宿主时：会话区只显示"独立打开无原生会话"的说明；装进 Desktop 后宿主的 client 会接管本区 */
+    /* 顶栏状态：装进 Desktop 时由宿主原生会话承担；独立打开如实说明 */
     (function () {
       var framed = false;
       try { framed = window.parent && window.parent !== window; } catch (e) { framed = false; }
-      var note = $('#agent-note'), standalone = $('#agent-standalone');
-      if (!framed) {
-        if (note) note.textContent = '独立打开：无原生会话（装进 Desktop 后可用）';
-        if (standalone) standalone.hidden = false;
-      } else {
-        if (note) note.textContent = 'AI 对话由宿主原生会话提供';
-        if (standalone) standalone.hidden = true;
-      }
+      var note = $('#agent-note');
+      if (note) note.textContent = framed ? 'AI 对话在右侧原生会话' : '独立打开：无 AI 会话（装进 Desktop 后可用）';
     })();
     render();
   });
