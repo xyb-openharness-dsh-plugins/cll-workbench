@@ -78,15 +78,16 @@
   function cbcAll() { return D.cbc.concat(state.extra.cbc).sort(function (a, b) { return a.d < b.d ? -1 : 1; }); }
   function metrics() { /* 与一图秀共用同一目录（23 号 A：单一来源） */
     var c = cbcAll(), b = D.biochem;
+    /* 每指标固定色：蓝族（血象）与绿族（生化）内用深浅区分；同一指标在任何页同一色 */
     return [
-      { code: 'wbc', series: '血象', name: '白细胞', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.wbc, lab: r.lab }; }) },
-      { code: 'alc', series: '血象', name: '淋巴细胞绝对值（ALC）', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.alc, lab: r.lab }; }) },
-      { code: 'plt', series: '血象', name: '血小板', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.plt, lab: r.lab }; }) },
-      { code: 'hgb', series: '血象', name: '血红蛋白', unit: 'g/L', pts: c.map(function (r) { return { d: r.d, v: r.hgb, lab: r.lab }; }) },
-      { code: 'ldh', series: '生化', name: '乳酸脱氢酶（LDH）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.ldh, lab: r.lab }; }) },
-      { code: 'b2m', series: '生化', name: 'β2 微球蛋白', unit: 'mg/L', pts: b.map(function (r) { return { d: r.d, v: r.b2m, lab: r.lab }; }) },
-      { code: 'alt', series: '生化', name: '谷丙转氨酶（ALT）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.alt, lab: r.lab }; }) },
-      { code: 'crea', series: '生化', name: '肌酐', unit: 'μmol/L', pts: b.map(function (r) { return { d: r.d, v: r.crea, lab: r.lab }; }) },
+      { code: 'wbc', series: '血象', color: '#141414', name: '白细胞', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.wbc, lab: r.lab }; }) },
+      { code: 'alc', series: '血象', color: '#1d5fbf', name: '淋巴细胞绝对值（ALC）', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.alc, lab: r.lab }; }) },
+      { code: 'plt', series: '血象', color: '#5b8ac4', name: '血小板', unit: '10⁹/L', pts: c.map(function (r) { return { d: r.d, v: r.plt, lab: r.lab }; }) },
+      { code: 'hgb', series: '血象', color: '#8fb0d9', name: '血红蛋白', unit: 'g/L', pts: c.map(function (r) { return { d: r.d, v: r.hgb, lab: r.lab }; }) },
+      { code: 'ldh', series: '生化', color: '#2e7d32', name: '乳酸脱氢酶（LDH）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.ldh, lab: r.lab }; }) },
+      { code: 'b2m', series: '生化', color: '#5da068', name: 'β2 微球蛋白', unit: 'mg/L', pts: b.map(function (r) { return { d: r.d, v: r.b2m, lab: r.lab }; }) },
+      { code: 'alt', series: '生化', color: '#8fbc97', name: '谷丙转氨酶（ALT）', unit: 'U/L', pts: b.map(function (r) { return { d: r.d, v: r.alt, lab: r.lab }; }) },
+      { code: 'crea', series: '生化', color: '#b5cfc0', name: '肌酐', unit: 'μmol/L', pts: b.map(function (r) { return { d: r.d, v: r.crea, lab: r.lab }; }) },
       { code: 'mrd', series: '分子', name: 'MRD（流式）', unit: '%', pts: D.mrdSeries.map(function (m) { return { d: m.d, v: m.v, lab: m.lab }; }) },
       { code: 'exam', series: '体格', name: '淋巴结与脾脏评估', unit: '', qual: true, pts: D.exam.map(function (r) { return { d: r.d, v: null, text: r.text, lab: r.lab }; }) }
     ];
@@ -149,8 +150,10 @@
   var CHART_W = 760, CHART_H = 300, PAD = { l: 14, r: 74, t: 26, b: 34 };
   /* achromatic-ledger：全屏只有一个彩色，给"主数据元素"。血象是本病种的主线 → 取 #1d5fbf；
      其余序列用墨色与灰阶（不引入第二、第三个色相）。 */
-  var SERIES_COLORS = { '血象': '#1d5fbf', '生化': '#141414', '分子': '#8a8a8a', '体格': '#6b6b6b' };
-  var SERIES_SOFT = { '血象': '#f4f7fc', '生化': '#f5f5f5', '分子': '#f7f7f7', '体格': '#f7f7f7' };
+  /* 双色预算：蓝=血象（主），绿=生化（次）；分子/体格保持灰阶。
+     屏幕上永远只有蓝绿两族彩色，其余中性。 */
+  var SERIES_COLORS = { '血象': '#1d5fbf', '生化': '#2e7d32', '分子': '#8a8a8a', '体格': '#6b6b6b' };
+  var SERIES_SOFT = { '血象': '#e6f0fa', '生化': '#e6f4ec', '分子': '#f7f7f7', '体格': '#f7f7f7' };
 
   function timeRange(range, anchorD) {
     var months = { '3m': 3, '6m': 6, '12m': 12 }[range] || 0;
@@ -184,7 +187,7 @@
       return PAD.l + (days(t0, d) / span) * (CHART_W - PAD.l - PAD.r);
     };
     var picked = codes.map(metricByCode).filter(Boolean);
-    var drawn = [], msgs = [], paths = [], dots = '', labels = '';
+    var drawn = [], msgs = [], paths = [], dots = '', labels = '', endLabels = [];
     var plotTop = PAD.t + (showTx ? 26 : 6), plotBottom = CHART_H - PAD.b, plotH = plotBottom - plotTop;
 
     picked.forEach(function (m, si) {
@@ -194,7 +197,7 @@
       var pts = m.pts.filter(function (p) { return typeof p.v === 'number' && p.d >= t0 && p.d <= t1; });
       if (!pts.length) { msgs.push(esc(mShort(m)) + '：这个时间窗里没有记录'); return; }
       var y = function (v) { return plotTop + (1 - (v - scale.lo) / scale.span) * plotH; };
-      var col = SERIES_COLORS[m.series] || '#2f5fa8';
+      var col = m.color || SERIES_COLORS[m.series] || '#1d5fbf';
       var xy = pts.map(function (p) { return [x(p.d), y(p.v)]; });
       if (xy.length > 1) paths.push({ code: m.code, d: smoothPath(xy), col: col });
       pts.forEach(function (p, i) {
@@ -206,12 +209,25 @@
           esc(mShort(m)) + '：' + p.v + ' ' + esc(m.unit) + ' · ' + p.d + '</title></circle>';
         if (isLast && xy.length > 1) {
           var lx = x(p.d), anchor = (CHART_W - lx) < 60 ? 'end' : 'start';
-          labels += '<text class="lbl" x="' + r2(lx + (anchor === 'end' ? -8 : 8)) + '" y="' + r2(y(p.v) + (si % 2 ? -12 : 8) + si * 3) +
-            '" text-anchor="' + anchor + '" fill="' + col + '">' + p.v + ' ' + esc(m.unit) + '</text>';
+          endLabels.push({ lx: lx, y: y(p.v), anchor: anchor, col: col,
+            text: p.v + ' ' + (m.unit || '') });
         }
       });
       drawn.push({ m: m, lo: scale.lo, hi: scale.hi, n: pts.length, col: col });
     });
+
+    /* 末点标签：按 y 排序后做最小 18px 垂直避让（多条线收在同一侧时不叠） */
+    endLabels.sort(function (a, b) { return a.y - b.y; });
+    var lastY = -Infinity;
+    endLabels.forEach(function (L, i) {
+      var yy = Math.max(L.y, lastY + 18);
+      if (i > 0 && yy === L.y) yy = L.y;
+      lastY = yy; L.yy = yy;
+    });
+    labels = endLabels.map(function (L) {
+      return '<text class="lbl" x="' + r2(L.lx + (L.anchor === 'end' ? -8 : 8)) + '" y="' + r2(L.yy) +
+        '" text-anchor="' + L.anchor + '" fill="' + L.col + '">' + esc(L.text) + '</text>';
+    }).join('');
 
     /* 治疗条：绘图区上方独立泳道（关掉后数据坐标不变） */
     var tx = '';
@@ -279,6 +295,12 @@
   function mShort(m) { return m.name.replace(/（.*?）/g, ''); }
 
   /* ================= 指标卡（固定尺寸原位翻转；正面=色点+当前值+较前次箭头+记录数；背面=sparkline 带端值日期） ================= */
+  function mixSoft(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return '#f2f4f8';
+    var n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return 'rgba(' + r + ',' + g + ',' + b + ',0.08)';
+  }
   function deltaOf(m) {
     if (m.qual) return null;
     var pts = m.pts.filter(function (p) { return typeof p.v === 'number'; });
@@ -313,8 +335,8 @@
     var nums = m.pts.filter(function (p) { return typeof p.v === 'number'; });
     var latest = nums[nums.length - 1] || null;
     var dl = deltaOf(m);
-    var col = SERIES_COLORS[m.series] || '#2f5fa8';
-    var soft = SERIES_SOFT[m.series] || '#f2f4f8';
+    var col = m.color || SERIES_COLORS[m.series] || '#1d5fbf';
+    var soft = m.color ? mixSoft(m.color) : (SERIES_SOFT[m.series] || '#f2f4f8');
 
     var arrow = '';
     if (m.qual) arrow = '<span class="mdelta flat">描述性，不进折线</span>';

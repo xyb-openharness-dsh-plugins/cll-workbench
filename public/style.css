@@ -8,14 +8,19 @@
      规则：chrome 不含任何彩色；唯一的图表色 #1d5fbf 只给"主数据元素"；其余用墨色与灰阶。
      彩色像素目标 <1%。字体：系统 SF Pro（离线可用；本机无 Geist，且病历应用不依赖网络字体），
      数字用 SF Mono + tabular-nums，让化验值成列对齐（该样式的"账本"取向）。 */
-  --ground:#f8f8f8; --surface:#ffffff; --raised:#eeeeee; --active:#eeeeee;
+  /* 双色预算（用户 2026-10-26 指定浅绿+浅蓝）：
+     蓝 = 数据与选中；绿 = 状态（符合/正常）。底色带一丝蓝绿的白，卡面仍纯白。
+     除这两族外仍保持中性，避免回到彩虹图表。 */
+  --ground:#f5f9f7; --surface:#ffffff; --raised:#eef2ef; --active:#e3eef7;
   --border:#e6e6e6; --rule:#f0f0f0; --control:#d4d4d4;
   --text:#0a0a0a; --muted:#6b6b6b; --faint:#8a8a8a;
   --accent:#141414;                 /* chrome 的"强调"= 墨色本身 */
-  --chart-hue:#1d5fbf;              /* 唯一图表色：主数据线 */
+  --chart-hue:#1d5fbf;              /* 蓝：主数据线（血象） */
+  --hue-green:#2e7d32;              /* 绿：第二序列（生化）与正向状态 */
   --chart-ink:#141414; --chart-grey:#8a8a8a;
+  --soft-blue:#e6f0fa; --soft-green:#e6f4ec;
   --positive:#2e7d32; --negative:#c4242a; --warning:#92400e;
-  --pill-positive-bg:#dcfae5; --pill-positive-ink:#04250e;
+  --pill-positive-bg:#e6f4ec; --pill-positive-ink:#1c5c34;
   --pill-negative-bg:#ffedea; --pill-negative-ink:#831c1e;
   --pill-warning-bg:#fffbeb; --pill-warning-ink:#92400e; --pill-warning-border:#fde68a;
   --pill-neutral-bg:#eeeeee; --pill-neutral-ink:#3d3d3d;
@@ -98,7 +103,7 @@ h1{font-size:var(--fs-title); font-weight:700; letter-spacing:-.02em; line-heigh
 }
 .sidebar a:hover{background:#f0f1f2}
 /* 导航退到后面：激活项只用中性灰 pill，不用品牌色和左侧色条 */
-.sidebar a[aria-current="page"]{color:var(--ink); font-weight:600; background:var(--active)}
+.sidebar a[aria-current="page"]{color:var(--ink); font-weight:600; background:var(--active); box-shadow:inset 2px 0 0 var(--chart-hue)}
 .nav-note{margin-top:auto; padding-top:18px; font-size:12.5px; color:var(--muted)}
 .main-col{min-width:0; display:flex}
 #view{max-width:1180px; width:100%; margin:0 auto; padding:var(--pad) var(--pad) 48px; outline:none}
