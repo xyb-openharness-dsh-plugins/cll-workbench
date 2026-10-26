@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.8.0</title>
-<link rel="stylesheet" href="style.css">
+<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.9.0</title>
+<link rel="stylesheet" href="style.css?v=0.9.0">
 </head>
 <body>
 
@@ -12,7 +12,17 @@
 
 <!-- 顶栏：品牌一步回首页；版本常显；AI 会话区开关 -->
 <header class="topbar">
-  <a class="brand" href="#dash">小淋宝 LymPal <span class="ver">v0.8.0</span></a>
+  <a class="brand" href="#dash" aria-label="小淋宝 LymPal · 回到看板">
+    <!-- 标识：淋巴细胞轮廓（外环 + 核 + 一枚小卫星点），线宽与界面图标一致 -->
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="12" cy="12" r="3.1" fill="currentColor"/>
+      <circle cx="19.1" cy="5.6" r="1.9" fill="var(--chart-hue)"/>
+    </svg>
+    <span class="brand-word">小淋宝</span>
+    <span class="brand-latin">LymPal</span>
+    <span class="ver">v0.9.0</span>
+  </a>
   <div class="topbar-right">
     <span class="conn" id="agent-note">AI 对话在右侧原生会话</span>
     <button type="button" class="btn btn-discuss-top" data-act="discuss"
@@ -50,7 +60,7 @@
 
 <!-- 页脚贴底：flex column + min-height:100vh；版本 + (view,sub) 计数常显 -->
 <footer class="footer">
-  <span>小淋宝 LymPal <b class="ver">v0.8.0</b></span>
+  <span>小淋宝 LymPal <b class="ver">v0.9.0</b></span>
   <span>构建日：2026-10-25</span>
   <span>一级页 13 · (view,sub) <b id="view-sub-count">19</b></span>
   <span>数据目录：~/LymPal/病历资料 · 已挂载（本机，演示只读）</span>
@@ -59,7 +69,7 @@
 
 <div id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="demo-data.js"></script>
-<script src="app.js"></script>
+<script src="demo-data.js?v=0.9.0"></script>
+<script src="app.js?v=0.9.0"></script>
 </body>
 </html>

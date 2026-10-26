@@ -1,3 +1,45 @@
+## v0.9.0 · 2026-10-26（包版本 0.9.0）
+
+按用户反馈重做视觉：补标识（之前没有 logo），配色与字体按 `design-taste-frontend` 的发牌结果重来。
+
+### 一、风格发牌（不是自选色）
+```
+node draw.mjs --app --kind workspace --brief "CLL patient's own longitudinal record..." \
+  --screens "overview,detail,list" --theme light --style achromatic-ledger
+```
+→ **achromatic-ledger**（seed 153597366）：chrome 不含任何彩色，唯一的图表色 `#1d5fbf` 只给主数据元素，
+其余用墨色与灰阶，彩色像素预算 <1%。
+
+### 二、标识
+- 新增内联 SVG 标识：**淋巴细胞轮廓**（外环 + 核 + 一枚卫星点），线宽 1.6 与界面图标一致，
+  主色点用 `--chart-hue`。放在顶栏品牌左侧 22×22，不再是纯文字品牌。
+
+### 三、字体
+- 一个 grotesk + 一个等宽：正文 `SF Pro Text`（-apple-system），数字 `SF Mono` + `tabular-nums`。
+  **不用 Google Fonts 的 Geist**：本机未安装，且病历工作台不该在运行时依赖外网字体（离线可用优先），
+  已在样式表注释写明这是对发牌结果的替代与理由。
+- 字阶按 sheet：标题 24 / 小节 16 / KPI 26–30 / 正文 14 / 小字 12；标题 700，其余 500。
+
+### 四、版式与密度
+- 顶栏 48px、单线分隔、无毛玻璃（去掉 `backdrop-filter` 与半透明底）。
+- 侧栏 256px，激活项 = 中性灰 pill（无品牌色、无色条）。
+- 卡片 18/20 padding、gap 12、圆角 8、**无阴影**（阴影只给 toast 与浮层）。
+- 入组档案从"11 个小卡片套卡片"改为**细线分隔的字段网格**。
+- 指标卡数值改等宽、涨跌箭头改中性墨色（**升/降不涂红绿**：方向好坏是医生的判断，工作台不替患者下结论）。
+
+### 五、taste linter 结果
+`node lint.mjs --app` → **0 FAIL**（修掉 2 处渐变、2 处 emoji 当图标、多余阴影/毛玻璃/eyebrow）。
+剩余 WARN：mono×4（本风格的刻意选择，数字成列）、shadow×1（toast 浮层）、em-dash×1。
+
+### 验证
+- 实测：`--chart-hue:#1d5fbf`、`--ground:#f8f8f8`、h1 24px、顶栏 48px、标识 22×22、数值 SF Mono 26px。
+- test 44/44（守卫改为新 token：ground/chart-hue/accent + 必须有 mark + 必须有 font-sans/font-mono）；check 全绿。
+- 截图已重拍（dash / labs / onechart / trial-match）。
+
+### 未完成（如实）
+- `inspect.mjs` 未跑（需要另起 Chrome 实例做三档宽度量测），本轮用 DOM 实测替代。
+- 真机点击「和 AI 讨论」的实际发送仍未验；一手访谈 0。
+
 ## v0.8.0 · 2026-10-25（包版本 0.8.0）
 
 两件事：去掉演示期残留的 AI 会话 UI；按 `design-taste-frontend`（taste skill v2）的 app-screen 规则重做配色。

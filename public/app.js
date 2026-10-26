@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.8.0' };
+  var APP_INFO = { version: '0.9.0' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
@@ -172,10 +172,10 @@
 
   /* ================= SVG 折线图（根 class="chart"；每条线按自身全期范围缩放） ================= */
   var CHART_W = 760, CHART_H = 300, PAD = { l: 14, r: 74, t: 26, b: 34 };
-  /* taste §6.4：一个主体一个色相。四条线用同一蓝的深浅 + 中性灰组合，
-     既保证可辨识，又不让屏幕出现四五种无关色相；强调色只落在"血象"（主数据线）。 */
-  var SERIES_COLORS = { '血象': '#1f4f8f', '生化': '#5b7fae', '分子': '#8fa8c9', '体格': '#6b7280' };
-  var SERIES_SOFT = { '血象': '#eef3fa', '生化': '#f4f6f9', '分子': '#f8f9fb', '体格': '#f3f4f6' };
+  /* achromatic-ledger：全屏只有一个彩色，给"主数据元素"。血象是本病种的主线 → 取 #1d5fbf；
+     其余序列用墨色与灰阶（不引入第二、第三个色相）。 */
+  var SERIES_COLORS = { '血象': '#1d5fbf', '生化': '#141414', '分子': '#8a8a8a', '体格': '#6b6b6b' };
+  var SERIES_SOFT = { '血象': '#f4f7fc', '生化': '#f5f5f5', '分子': '#f7f7f7', '体格': '#f7f7f7' };
 
   function timeRange(range, anchorD) {
     var months = { '3m': 3, '6m': 6, '12m': 12 }[range] || 0;
@@ -458,7 +458,7 @@
   /* ================= 通用小组件 ================= */
   function pageHead(eyebrow, title, desc, actions) {
     /* 「和 AI 讨论」在顶栏常驻一个（全局，随当前页变化），页头不再重复第二个同功能按钮 */
-    return '<header class="page-head"><p class="eyebrow">' + esc(eyebrow) + '</p><div class="ph-row"><h1>' + esc(title) + '</h1>' +
+    return '<header class="page-head"><div class="ph-row"><h1>' + esc(title) + '</h1>' +
       '<div class="actions">' + (actions || '') + '</div></div><p class="page-desc">' + desc + '</p></header>';
   }
 
@@ -800,9 +800,9 @@
   var TRIAL_SCOPE = { first_line: '一线', rrmm: '复发/难治', frail: '老年/虚弱', registry: '登记研究', translational: '转化研究' };
   var CRIT_CAT = { diagnosis: '诊断', subtype: '病理类型', stage: '分期', prior_tx: '既往治疗', genomic: '检测结果', organ: '器官功能', lab: '化验', age: '年龄', performance: '体能状态', other: '其他' };
   var TIER = {
-    conflict: { label: '不符合', mark: '✕', cls: 'no' },
+    conflict: { label: '不符合', mark: '×', cls: 'no' },
     undetermined: { label: '待确认', mark: '?', cls: 'q' },
-    satisfied: { label: '符合', mark: '✓', cls: 'ok' }
+    satisfied: { label: '符合', mark: '·', cls: 'ok' }
   };
   var TIER_ORDER = ['conflict', 'undetermined', 'satisfied'];
 

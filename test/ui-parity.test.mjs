@@ -65,12 +65,19 @@ test('⑥ index.html 只差版本占位与数据源引用', () => {
 test('⑦ 配色守住 taste app-screen 口径（chrome 中性 / 一处强调 / 扁平）', () => {
   const css = read('public/style.css')
   /* 底部/卡面为中性；强调色只落数据与主行动 */
-  assert.match(css, /--ground:#f9fafb/)
-  assert.match(css, /--accent:#1f4f8f/)
+  /* achromatic-ledger sheet：底 #f8f8f8、唯一图表色 #1d5fbf、chrome accent = 墨色 */
+  assert.match(css, /--ground:#f8f8f8/)
+  assert.match(css, /--chart-hue:#1d5fbf/)
+  assert.match(css, /--accent:#141414/)
   /* 卡片不得带阴影（扁平分隔靠 1px 边） */
   assert.doesNotMatch(css, /\.card\{[^}]*box-shadow/, '卡片带了阴影')
   /* 主行动用近黑，不用品牌色填充 */
   assert.match(css, /\.btn-primary\{background:var\(--ink\)/)
   /* 导航激活项用中性灰，不用品牌色 */
   assert.match(css, /\.sidebar a\[aria-current="page"\]\{[^}]*background:var\(--active\)/)
+  /* 标识：顶栏必须有 SVG mark（不是纯文字品牌） */
+  assert.match(read('public/index.html'), /class="mark"/)
+  /* 字族：一个 grotesk + 一个等宽（数字）；不得回退到无字体声明 */
+  assert.match(css, /--font-sans:/)
+  assert.match(css, /--font-mono:/)
 })
