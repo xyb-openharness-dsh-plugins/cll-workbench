@@ -1,6 +1,6 @@
 /* jshint browser:true */
 /* 小淋宝 LymPal · M2 原型 v0.1.0 · app.js（零框架，事件委托 + hash 路由）
-   红线：不判读、不建议、不代发；删除=改这一条；AI 示例只填输入框（cll:agent-draft 协议）。 */
+   红线：不判读、不建议、不代发；删除=改这一条；页面只发 cll:agent-draft 给宿主原生会话。 */
 (function () {
   'use strict';
   var APP_INFO = { version: '0.9.3' };
@@ -417,7 +417,7 @@
     }).join('');
   }
 
-  /* ================= AI 协助（cll:agent-draft：只填输入框，不自动发送） ================= */
+  /* ================= 与 AI 讨论：只发草稿给宿主的原生会话 ================= */
   function aiContext() {
     var kept = filterPrivate(D.ae.concat(D.mood), 'ai');
     var c = cbcAll();
@@ -429,15 +429,16 @@
     };
   }
   /* 把「本页关键信息 + 提示词」交给宿主的原生会话去发。
-     投递协议：window.parent.postMessage({ type:'cll:agent-draft', prompt, context, autoSubmit:true })
+     投递协议：window.parent.postMessage({ type:'cll:agent-draft', prompt, send:true })
      —— 原生会话的创建与提交由 lib/client.js 负责（页面无权直接操作宿主会话）。
-     独立打开（无宿主）时如实提示，不伪造发送成功。 */
+     页面不自建输入框、不显示会话记录；独立打开（无宿主）时如实提示，不伪造发送成功。 */
   function agentDraft(prompt, opts) {
     var ctx = aiContext();
     var payload = {
       type: 'cll:agent-draft',
       prompt: prompt,
       context: ctx,
+      send: (opts && opts.autoSubmit) !== false,
       autoSubmit: (opts && opts.autoSubmit) !== false
     };
     var framed = false;
@@ -448,13 +449,8 @@
       return payload;
     }
     /* 无宿主：不假装发出去了 */
-    toast('独立打开时没有可用的 AI 会话；装进 DSH Desktop 后本按钮会直接发到右侧对话');
+    toast('独立打开时没有会话面板；装进 DSH Desktop 后本按钮会直接发到右侧 AI 对话');
     return payload;
-  }
-  function aiBtn(prompt, label) {
-    return '<button type="button" class="btn btn-ai" data-act="agent-draft" data-prompt="' + esc(prompt) + '">' +
-      svgIcon('spark') + (label || 'AI 协助（示例）') + '</button>' +
-      '<span class="muted">cll:agent-draft：只填输入框，不自动发送</span>';
   }
   function svgIcon(name) {
     var paths = {
@@ -543,15 +539,15 @@
     if (!anchor) {
       out += '<p class="status-eyebrow">状态卡 · 待初始化</p>' +
         '<p class="status-day"><b>待初始化</b></p>' +
-        '<p class="status-now">还没有锚点日（例如启动治疗日）。先完成三步初始化，天数才会出现。</p>' +
+        '<p class="status-now">还没有能算天数的锚点。记一条带开始日期的治疗之后，这里会显示第 N 天——天数由你记的日期算出，工作台不推断病程。</p>' +
         '<div class="status-actions">' +
-        '<button type="button" class="btn btn-primary" data-act="go-settings">去三步向导</button>' +
+        '<button type="button" class="btn btn-primary" data-act="go-med-log">去记一条治疗</button>' +
         '<button type="button" class="btn" data-primer-open>疾病概要：CLL/SLL 是什么？</button></div>';
     } else {
       var day = Math.max(0, Math.floor((new Date(today + 'T00:00:00') - new Date(anchor + 'T00:00:00')) / 86400000));
-      out += '<p class="status-eyebrow">D+' + day + ' 状态卡 · 距下次复查</p>' +
-        '<p class="status-day"><b>第 ' + day + ' 天</b><span class="status-anchor">锚点：' + esc(anchor) + ' 启动 BTKi（照抄医嘱）</span></p>' +
-        '<p class="status-now">BTKi 持续治疗（' + esc(rx.drug) + ' ' + esc(rx.dose) + '） · 用药中 · 下次：待录入（复查安排未在本机记录）</p>' +
+      out += '<p class="status-eyebrow">D+' + day + ' 状态卡 · 暂无已记的安排</p>' +
+        '<p class="status-day"><b>第 ' + day + ' 天</b><span class="status-anchor">锚点 ' + esc(anchor) + '（启动 BTKi，Day 0）· 由档案日期算出，不手填</span></p>' +
+        '<p class="status-now">当前记录：BTKi 持续治疗（' + esc(rx.drug) + ' ' + esc(rx.dose) + '） · 下次复查：本机未记录</p>' +
         '<div class="status-actions">' +
         '<button type="button" class="btn btn-primary" data-act="go-med-log">看口服药日志（按天）→</button>' +
         '<button type="button" class="btn" data-primer-open>疾病概要：CLL/SLL 是什么？</button></div>';
@@ -559,11 +555,15 @@
     return out + '</section>';
   }
 
-  /* ---- 看板（入口文案与 INTERACTION-DESIGN §二逐字一致，IP3） ---- */
+  /* ---- 看板：状态卡（锚点派生天数）→ 今天与接下来 → 业务卡 ----
+     与家族看板（小粉宝/小胆宝）同构：先给病程状态，再给眼前能做的事，最后才是各业务页入口。
+     只搬既有事实，不新增判读词；没有记录的写「未记录」。 */
   function pageDash() {
     var c = cbcAll(), last = c[c.length - 1], L = ldtDays();
-    var today = '2026-10-25';
+    var now = new Date();
+    var today = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' + ('0' + now.getDate()).slice(-2);
     var todayState = D.checkins.filter(function (r) { return r.d === today; })[0];
+    var pendingQ = (state.extra.questions || []).length;
     function entryCard(title, buttons, note) {
       return '<section class="card entry-card"><div class="card-head"><h2 class="h2">' + esc(title) + '</h2></div>' +
         '<div class="entry-actions">' + buttons + '</div>' + (note ? '<p class="muted">' + note + '</p>' : '') + '</section>';
@@ -571,22 +571,36 @@
     function entryBtn(act, label, primary) {
       return '<button type="button" class="btn' + (primary ? ' btn-primary' : '') + '" data-act="' + act + '">' + esc(label) + '</button>';
     }
-    var html = pageHead('看板', '今天先看哪一块',
-      '小淋宝只做整理与照抄，不给结论；所有判定都在诊室里完成。',
-      aiBtn('帮我把最近的复查数值整理成一段给医生看的清单（只整理，不判读）'));
+    var html = pageHead('看板', '今天，先把眼前的事理清楚',
+      '小淋宝只做整理与照抄，不给结论；所有判定都在诊室里完成。');
     html += dashStatusCard(today);
-    html += '<div class="dash-grid">' +
+
+    /* 第二层：今天与接下来——只摆已记录的事实，缺席就写「未记录」 */
+    html += '<div class="section-title"><div><h2>今天与接下来</h2>' +
+      '<p>能今天做完的先做；没有记录的写「未记录」，工作台不替你安排。</p></div></div>' +
+      '<div class="dash-grid">' +
+      entryCard('今天：吃药打卡', entryBtn('go-checkin', '今天吃了吗', true),
+        todayState ? ('当日记录：' + todayState.state + '（漏服不评判）') : '今天还没有打卡记录') +
+      entryCard('接下来：复查与要问的', entryBtn('go-prep', '准备复诊', true) + entryBtn('go-trial-match', '看临床研究'),
+        '下次复查：本机未记录 · 待问问题 ' + pendingQ + ' 条（勾选后才进导出）') +
+      '</div>';
+
+    /* 第三层：业务卡——与左侧一级页一一对应 */
+    html += '<div class="section-title"><div><h2>业务页入口</h2>' +
+      '<p>按你现在要处理的事选一块；每块都能单独用。</p></div></div>' +
+      '<div class="dash-grid">' +
       entryCard('观察与等待', entryBtn('go-ww', '记一次血常规', true) + entryBtn('go-ww-trend', '看淋巴细胞趋势'),
         'W&W 速览：最近 ALC ' + last.alc + ' ×10⁹/L（' + fmtD(last.d) + '）' + (L ? ' · LDT ' + L.days + ' 天（只算天数）' : '')) +
-      entryCard('今日', entryBtn('go-checkin', '今天吃了吗', true),
-        todayState ? ('当日状态：' + todayState.state + '（漏服不评判）') : '当日未记录') +
-      entryCard('副作用', entryBtn('go-ae', '记一次不舒服', true),
+      entryCard('指标检测与一图秀', entryBtn('go-labs', '看指标卡', true) + entryBtn('go-onechart', '病情一图秀'),
+        '四系列指标卡可翻面看说明；一图秀叠看 1–4 条线。') +
+      entryCard('副作用与口服药', entryBtn('go-ae', '记一次不舒服', true) + entryBtn('go-med-log', '看口服药日志'),
         '最近一条：' + esc(D.ae[0].d + ' ' + D.ae[0].term) + '（词表按当前用药过滤）') +
-      entryCard('一图秀', entryBtn('go-onechart', '病情一图秀（选几条线叠看）', true), '叠看 1–4 条指标线，只重绘图区。') +
-      entryCard('临床试验', entryBtn('go-trial-match', '帮我匹配', true), '三档比对（已满足／可能冲突／无法判定）+ 证据链，无匹配度。') +
+      entryCard('基因与 MRD', entryBtn('go-gene', '补一条基因结果', true) + entryBtn('go-mrd', '记一次 MRD 结果'),
+        'FISH/TP53/IGHV 三态档案；MRD 原文照抄。') +
+      entryCard('临床研究', entryBtn('go-trial-match', '按记录逐条对照', true),
+        '三档（符合／不符合／无法判定）+ 证据链；不算符合度、不排名。') +
       entryCard('复诊准备', entryBtn('go-prep', '准备复诊', true), '选区间、勾线、生成资料包与问题清单。') +
-      entryCard('基因档案', entryBtn('go-gene', '补一条基因结果', true), 'FISH/TP53/IGHV 三态档案。') +
-      entryCard('MRD', entryBtn('go-mrd', '记一次 MRD 结果', true), '流式/NGS 原文照抄 + 里程碑轨道。') +
+      entryCard('病情整理', entryBtn('go-records', '整理病历资料', true), '原件在本机目录；候选逐项核对后才入事实层。') +
       '</div>';
     return html;
   }
@@ -616,7 +630,7 @@
 
     /* 病情档案：4 枚胶囊 + 一条病情与治疗时间轴（先看结构，再读细节） */
     var p = D.profile;
-    var html = pageHead('病情整理', '病情档案', '诊断与分期照抄报告原文，双轨并存不换算；下面这条时间轴就是病历的骨架。', backHome() + aiBtn('帮我把档案里的分期和基因字段抄成一张就诊随身清单（只照抄）'));
+    var html = pageHead('病情整理', '病情档案', '诊断与分期照抄报告原文，双轨并存不换算；下面这条时间轴就是病历的骨架。', backHome());
 
     /* 关键信息胶囊（≤4 枚：每枚一个事实，不装饰） */
     var cur = (D.rxChanges || []).length ? '治疗中 · 泽布替尼' : '观察与等待';
@@ -672,7 +686,7 @@
   function pageWw() {
     var L = ldtDays();
     var html = pageHead('观察与等待', 'W&W 轨道',
-      '按医嘱间隔记血常规；ALC 趋势与倍增时间只算天数，不判读、无方向性催促文案。', backHome() + aiBtn('帮我把拍照的血常规单识别成候选记录（识别后我逐项核对）'));
+      '按医嘱间隔记血常规；ALC 趋势与倍增时间只算天数，不判读、无方向性催促文案。', backHome());
     /* 表单（每页显式编辑 ≤1：本页唯一表单＝手工补一条） */
     html += '<section class="card"><div class="card-head"><h2 class="h2">淋巴细胞趋势（ALC）</h2>' + badge('只读') + '</div>' +
       chartSVG(['alc'], 'all', true) + '</section>' +
@@ -702,7 +716,7 @@
   /* ---- 指标检测 labs ---- */
   function pageLabs() {
     return pageHead('指标检测', '分系列指标卡',
-      '四系列（血象/生化/分子/体格）有序分组；点卡片翻面看系列说明、单位、参考区间来源与历史摘要。', backHome() + aiBtn('帮我把指标卡的最近值整理成一段就诊前口述稿（只照抄数值与日期）')) +
+      '四系列（血象/生化/分子/体格）有序分组；点卡片翻面看系列说明、单位、参考区间来源与历史摘要。', backHome()) +
       metricGroupsHTML();
   }
 
@@ -780,7 +794,7 @@
   function pageGene() {
     var stateName = { '未检出': 'ok', '检出': 'warn', '未测': 'grey' };
     var html = pageHead('基因与预后档案', 'FISH / TP53 / IGHV',
-      '未检出/检出/未测三态严格区分（未测≠未检出）；语境栏只解释词义；误选可「改这一条」。', backHome() + aiBtn('帮我核对我拍的 FISH/NGS 报告候选字段（核对后我才保存）'));
+      '未检出/检出/未测三态严格区分（未测≠未检出）；语境栏只解释词义；误选可「改这一条」。', backHome());
     html += '<section class="card"><div class="card-head"><h2 class="h2">档案（三态）</h2>' + moreMenu([['new-gene', '补一条基因结果'], ['edit-gene', '改这一条'], ['view-doc', '看原文']]) + '</div>' +
       '<div class="table-wrap"><table><thead><tr><th>项目</th><th>状态</th><th>日期</th><th>报告原文</th><th>实验室</th></tr></thead><tbody>' +
       D.gene.map(function (g) {
@@ -797,7 +811,7 @@
     var sub = state.route.sub || 'overview';
     var head = pageHead('口服药与治疗', '治疗线与每日打卡',
       '计划/实际分列；处方变更为分段事件；打卡不做 AI（见打卡页说明）。',
-      backHome() + (sub !== 'checkin' ? aiBtn('帮我把这一阶段的服药记录整理成一段就诊前的口述稿（只整理事实与日期）') : '<span class="muted">本页不设 AI 按钮，理由见正文。</span>'));
+      backHome());
     var nav = subnav('med', [['治疗线', 'overview'], ['今日打卡', 'checkin'], ['依从日历', 'calendar'], ['处方变更', 'rx'], ['副作用', 'ae']]);
     var body = '';
     if (sub === 'overview') {
@@ -877,12 +891,12 @@
   }
 
   /* ---- 临床研究 trial / trial/match ---- */
-  function trialTierName(t) { return { local: '本地库命中', external: '外部工具线索', pending: '待确认规则' }[t.tier]; }
+  function trialTierName(t) { return { local: '本地库命中', external: '外部工具线索', pending: '待人工核对规则' }[t.tier]; }
   /* 临床研究（对齐 biliary-tract-workbench v0.2 的展示口径）
    * 规矩：
-   *   ① 入组条件逐条给出「符合 / 不符合 / 待确认」三态，并**并排写清**「记录里是」与「条件要求」；
+   *   ① 入组条件逐条给出「符合 / 不符合 / 无法判定」三态，并**并排写清**「记录里是」与「条件要求」；
    *   ② 硬性条件不满足的单列一组，不混进可对照列表；
-   *   ③ 「我的偏好」（是否接受重新活检/安慰剂/可去城市）只影响提示与排序，**不参与医学条件判断**；
+   *   ③ 「我的偏好」（是否接受重新活检/安慰剂/可去城市）只作就诊提问的提醒，**不参与医学条件判断，也不排序**；
    *   ④ 收藏 = 跟踪"试验变了什么"，不是"我该不该进"；
    *   ⑤ 无核验日期的条目只显示「未核验」，不显示「招募中」。
    * 三档枚举沿用 35 号：satisfied / conflict / undetermined；pending（登记原文无法结构化）单列不计入统计。
@@ -892,24 +906,46 @@
   var CRIT_CAT = { diagnosis: '诊断', subtype: '病理类型', stage: '分期', prior_tx: '既往治疗', genomic: '检测结果', organ: '器官功能', lab: '化验', age: '年龄', performance: '体能状态', other: '其他' };
   var TIER = {
     conflict: { label: '不符合', mark: '×', cls: 'no' },
-    undetermined: { label: '待确认', mark: '?', cls: 'q' },
+    undetermined: { label: '无法判定', mark: '?', cls: 'q' },
     satisfied: { label: '符合', mark: '·', cls: 'ok' }
   };
   var TIER_ORDER = ['conflict', 'undetermined', 'satisfied'];
 
-  /* 入组档案（只读，不重复录入；每项带来源，缺失不阻断但判「待确认」） */
+  /* 基因三态读模型：未测不当作值（缺失→无法判定），但来源里写明「未测」 */
+  function geneOf(item) {
+    return (D.gene || []).filter(function (g) { return g.item === item; })[0] || null;
+  }
+  function geneStateOf(item) {
+    var g = geneOf(item);
+    return g && g.state !== '未测' ? g.state : null;
+  }
+  function geneSrcOf(item) {
+    var g = geneOf(item);
+    if (!g) return '基因与预后档案（无对应记录）';
+    return '基因与预后档案 · ' + (g.state === '未测' ? '未测' : ((g.d || '') + ' 报告原文'));
+  }
+  /* 入组档案（只读，不重复录入；字段全部取自既有读模型，缺失→无法判定） */
   function matchProfileFields() {
     var c = cbcAll(), last = c[c.length - 1] || {};
+    var p = D.profile || {};
+    var rx = (D.rxChanges || [])[0] || null;
     var btki = (D.rxChanges || []).filter(function (m) { return /泽布|BTKi|伊布/.test((m.drug || '') + (m.text || '')); });
+    var regimens = {};
+    (D.rxChanges || []).forEach(function (m) { if (m.drug) regimens[m.drug] = 1; });
+    var lineCount = Object.keys(regimens).length;
+    var dxCode = (String(p.dxNameText || '').match(/CLL|SLL/) || [''])[0];
+    var stageText = String(p.stageText || '');
+    var binet = (stageText.match(/Binet\s*([A-C])/) || [])[1];
+    var rai = (stageText.match(/Rai\s*([0-4])/) || [])[1];
     return [
-      { k: '年龄', v: '63 岁', src: '病情整理 · 出生年 1963（自算，仅展示）' },
-      { k: '诊断名（照抄）', v: 'CLL（2024-11-12 报告原文）', src: '病情整理 · 诊断档案' },
-      { k: 'Binet / Rai 分期（照抄）', v: 'A（照抄）/ 0 期（照抄）', src: '病情整理 · 分期双轨' },
-      { k: 'del(17p)（FISH）', v: '未检出（2024-11-15 报告原文）', src: '基因与预后档案' },
-      { k: 'TP53 突变', v: null, src: '基因与预后档案（未测）' },
-      { k: 'IGHV 突变状态', v: null, src: '基因与预后档案（未测）' },
-      { k: '既往 BTKi 用药', v: btki.length ? '在用泽布替尼（2026-06-01 起，医嘱原文）' : '无记录', src: '口服药与治疗 · 处方变更' },
-      { k: '治疗线数', v: '1 线（BTKi 持续治疗中）', src: '口服药与治疗' },
+      { k: '年龄', v: p.age ? p.age + ' 岁' : null, src: '病情整理 · 档案年龄（自算，仅展示）' },
+      { k: '诊断名（照抄）', v: (dxCode && p.dxDate) ? dxCode + '（' + p.dxDate + ' 报告原文）' : null, src: '病情整理 · 诊断档案' },
+      { k: 'Binet / Rai 分期（照抄）', v: (binet || rai) ? ((binet ? binet + '（照抄）' : '—') + ' / ' + (rai ? rai + ' 期（照抄）' : '—')) : null, src: '病情整理 · 分期双轨' },
+      { k: 'del(17p)（FISH）', v: geneStateOf('FISH del(17p)'), src: geneSrcOf('FISH del(17p)') },
+      { k: 'TP53 突变', v: geneStateOf('TP53 突变'), src: geneSrcOf('TP53 突变') },
+      { k: 'IGHV 突变状态', v: geneStateOf('IGHV 突变状态'), src: geneSrcOf('IGHV 突变状态') },
+      { k: '既往 BTKi 用药', v: (btki.length && rx) ? '在用' + rx.drug + '（' + rx.start + ' 起，医嘱原文）' : '无记录', src: '口服药与治疗 · 处方变更' },
+      { k: '治疗线数', v: rx ? lineCount + ' 线（' + rx.drug + (rx.end ? ' 已结束' : ' 持续治疗中') + '）' : '0 线（未用药）', src: '口服药与治疗' },
       { k: '最近血象（WBC/ALC/Plt/Hb）', v: last.d ? 'WBC ' + last.wbc + ' / ALC ' + last.alc + ' / Plt ' + last.plt + ' / Hb ' + last.hgb + '（' + last.d + '）' : null, src: '指标检测 · 血常规' },
       { k: 'ECOG 体能状态', v: null, src: '（无对应记录：门诊常写，但本工作台没有这个字段）' },
       { k: '既往 BTKi 后疾病状态（复发/难治？）', v: null, src: '（无对应记录）' }
@@ -942,7 +978,7 @@
     if (c.op === 'ge') state = parseInt(mine, 10) >= Number(c.value) ? 'satisfied' : 'conflict';
     else if (c.op === 'lte') state = parseInt(mine, 10) <= Number(c.value) ? 'satisfied' : 'conflict';
     else if (c.op === 'eq') state = mine === c.value ? 'satisfied' : 'conflict';
-    else if (c.op === 'absent') state = /在用|用过/.test(mine) ? 'conflict' : 'satisfied';
+    else if (c.op === 'absent') state = (typeof c.check === 'function' ? c.check(mine) : /在用|用过/.test(mine)) ? 'conflict' : 'satisfied';
     else if (c.op === 'present') state = /在用|用过|1 线/.test(mine) ? 'satisfied' : 'conflict';
     else if (c.op === 'naive') state = /^1 线/.test(mine) ? 'conflict' : 'satisfied';
     else state = 'undetermined';
@@ -954,15 +990,9 @@
     var count = function (s) { return evals.filter(function (e) { return e.state === s; }).length; };
     var met = count('satisfied'), unmet = count('conflict'), unknown = count('undetermined');
     var hardUnmet = evals.filter(function (e) { return e.state === 'conflict' && e.hard; });
-    /* 粗筛符合度：未知项按 0 计，只会偏低不会偏高（口径写在卡脚） */
-    var pct = Math.round((met / Math.max(1, met + unmet + unknown)) * 100);
-    var band = hardUnmet.length ? 'ineligible' : (pct >= 80 && unknown <= 1) ? 'high' : pct >= 55 ? 'partial' : 'needs_info';
-    return { t: t, evals: evals, met: met, unmet: unmet, unknown: unknown, pct: pct, band: band, hardUnmet: hardUnmet };
+    /* 只统计三档条数；不算符合度百分比、不给推荐分级、不按结果排序。 */
+    return { t: t, evals: evals, met: met, unmet: unmet, unknown: unknown, hardUnmet: hardUnmet, ineligible: hardUnmet.length > 0 };
   }
-  var BAND = {
-    high: ['高度符合', 'ok'], partial: ['部分符合', 'warn'],
-    needs_info: ['需补充信息', 'grey'], ineligible: ['硬性条件不满足', 'no']
-  };
   function trialMatches() {
     var P = {}; matchProfileFields().forEach(function (f) { P[f.k] = f; });
     return allTrials().map(function (t) { return matchTrial(t, P); });
@@ -977,33 +1007,31 @@
       '<small><b>' + TIER[e.state].label + '</b> · 记录里是：' + esc(e.mine) + ' · 条件要求：' + esc(e.need) + '</small></div>';
   }
   function trialCard(m) {
-    var t = m.t, band = BAND[m.band];
+    var t = m.t;
     var verified = t.verifiedOn ? '核验 ' + t.verifiedOn : '未核验';
     var statusLabel = t.verifiedOn ? (TRIAL_STATUS[t.status] || t.status) : '未核验（不显示招募状态）';
-    var order = { conflict: 0, undetermined: 1, satisfied: 2 };
-    var sorted = m.evals.slice().sort(function (a, b) { return order[a.state] - order[b.state]; });
-    var top = sorted.slice(0, 4), rest = sorted.slice(4);
-    return '<section class="trial-card' + (m.band === 'ineligible' ? ' ineligible' : '') + '">' +
+    /* 条件按登记原文顺序列出（不按结果重排），四条以上折叠 */
+    var top = m.evals.slice(0, 4), rest = m.evals.slice(4);
+    return '<section class="trial-card' + (m.ineligible ? ' ineligible' : '') + '">' +
       '<div class="trial-top"><div><div class="trial-tags">' +
       badge(statusLabel, t.status === 'recruiting' && t.verifiedOn ? 'ok' : t.status === 'suspended' ? 'warn' : 'grey') +
       badge((t.phase || '—'), 'grey') + badge(TRIAL_SCOPE[t.scope] || '—', 'grey') +
       (t.verifiedOn ? badge(verified, '') : '') + '</div>' +
       '<h2>' + esc(t.title) + '</h2>' +
-      '<p class="trial-reg">' + esc(t.id) + ' · ' + esc(t.source) + ' · ' + esc(((t.sites || []).map(function (x) { return x.city; }).join(' / ')) || '中心待定') + '</p></div>' +
-      '<div class="fit ' + band[1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + band[0] + '</em></div></div>' +
+      '<p class="trial-reg">' + esc(t.id) + ' · ' + esc(t.source) + ' · ' + esc(((t.sites || []).map(function (x) { return x.city; }).join(' / ')) || '中心待定') + '</p></div></div>' +
       '<div class="match-counts">' + badge('符合 ' + m.met, 'ok') +
         (m.unmet ? badge('不符合 ' + m.unmet, 'no') : '') +
-        (m.unknown ? badge('待确认 ' + m.unknown, 'grey') : '') +
+        (m.unknown ? badge('无法判定 ' + m.unknown, 'grey') : '') +
         (m.hardUnmet.length ? badge('硬性不满足 ' + m.hardUnmet.length, 'no') : '') + '</div>' +
       '<div class="crit-list">' + top.map(critLine).join('') + '</div>' +
       (rest.length ? '<details class="crit-more"><summary>其余 ' + rest.length + ' 条条件</summary><div class="crit-list">' + rest.map(critLine).join('') + '</div></details>' : '') +
       '<div class="trial-actions">' +
         '<button type="button" class="btn ' + (favIndex(t.id) >= 0 ? 'btn-quiet' : 'btn-primary') + '" data-act="trial-fav" data-id="' + esc(t.id) + '">' +
           (favIndex(t.id) >= 0 ? '已收藏（' + FAV_STATE[state.trialFavs[favIndex(t.id)].state] + '）' : '收藏并跟踪') + '</button>' +
-        '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
+        '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把无法判定项加进问题清单</button>' +
         '<button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看条件原文与中心</button>' +
       '</div>' +
-      '<p class="small-note">符合度 = 符合项 ÷ 已对照项；未知项按 0 计，因此只会偏低、不会偏高。这不是入组资格，也不代表效果。登记状态，未核实。</p>' +
+      '<p class="small-note">只逐条列出「符合 / 不符合 / 无法判定」，不计算符合度、不排名、不推荐。这不是入组资格，也不代表效果；登记状态，未核实。</p>' +
       '</section>';
   }
 
@@ -1012,10 +1040,9 @@
     var fields = matchProfileFields();
     var missing = fields.filter(function (f) { return !f.v; });
     var all = trialMatches();
-    /* 排序：待确认项少者优先 → 粗筛符合度高者优先（与页面文案一致，不是"匹配度排名"） */
-    var byInfo = function (a, b) { return (a.unknown - b.unknown) || (b.pct - a.pct); };
-    var fit = all.filter(function (m) { return m.band !== 'ineligible'; }).sort(byInfo);
-    var bad = all.filter(function (m) { return m.band === 'ineligible'; }).sort(byInfo);
+    /* 保持登记顺序：不按结果重排，避免看起来像"排名"。硬性不满足的单列。 */
+    var fit = all.filter(function (m) { return !m.ineligible; });
+    var bad = all.filter(function (m) { return m.ineligible; });
     var pref = state.trialPrefs || {};
     return '<div class="notice"><b>这里的试验条目是演示数据</b>（T-01…T-10），不是真实在招试验。' +
       '真实版本须接登记平台，逐条显示登记号、状态与核验日期；没有核验日期的只显示「未核验」，不显示「招募中」。</div>' +
@@ -1024,9 +1051,9 @@
       '<div class="fact-grid">' + fields.map(function (f) {
         return '<dl><dt>' + esc(f.k) + '</dt><dd><b' + (f.v ? '' : ' class="miss-b"') + '>' + esc(f.v || '未记录') + '</b><span>' + esc(f.src) + '</span></dd></dl>';
       }).join('') + '</div>' +
-      '<p class="small-note">这份清单只描述你的记录里有什么；缺失项对应的条件一律判「待确认」，不会被当作符合。</p></section>' +
+      '<p class="small-note">这份清单只描述你的记录里有什么；缺失项对应的条件一律判「无法判定」，不会被当作符合。</p></section>' +
       '<section class="card"><div class="card-head"><h2 class="h2">我的偏好（不影响医学条件）</h2>' +
-        '<span class="muted small">只改变提示与排序，不改变「符合/不符合」</span></div>' +
+        '<span class="muted small">只作就诊提问的提醒，不参与医学条件判断</span></div>' +
       '<div class="pref-row">' +
         '<label class="check"><input type="checkbox" data-act="trial-pref" data-key="biopsy"' + (pref.biopsy ? ' checked' : '') + '> 接受为入组重新活检</label>' +
         '<label class="check"><input type="checkbox" data-act="trial-pref" data-key="placebo"' + (pref.placebo ? ' checked' : '') + '> 接受安慰剂对照</label>' +
@@ -1034,14 +1061,14 @@
           ['all', '上海', '北京', '广州', '杭州', '成都'].map(function (c) {
             return '<option value="' + c + '"' + ((pref.city || 'all') === c ? ' selected' : '') + '>' + (c === 'all' ? '不限' : c) + '</option>';
           }).join('') + '</select></label></div></section>' +
-      '<section class="card"><div class="card-head"><h2 class="h2">检索与 AI</h2>' + badge('AI 只起草') + '</div>' +
-      '<div class="row">' + aiBtn(matchPrompt(), 'AI 协助整理命中证据') +
+      '<section class="card"><div class="card-head"><h2 class="h2">导出与来源</h2>' + badge('只导出，不判断') + '</div>' +
+      '<div class="row">' +
       '<button type="button" class="btn" data-act="export-trial">导出这次对照</button></div>' +
       '<p class="muted small">来源：' + esc(D.trialSourceLabel) + ' · 快照 ' + esc(D.trialSnapshot) + ' · 库内 ' + esc(D.trialLibraryCount) + ' 条，本页演示 ' + D.trials.length + ' 条。' +
       '外部通道脚本 fetch-cll-trials-2026 需在终端手动运行；在线终态如实透传（FAILED/无覆盖 ≠ 查过）。</p>' +
       '<pre class="agent-log" id="trialExport" hidden></pre></section>' +
       '<div class="section-title"><div><h2>按当前记录能对上的（' + fit.length + '）</h2>' +
-      '<p>待确认项越少排得越前；硬性条件不满足的单列在下面，不会混进来</p></div></div>' +
+      '<p>按登记顺序列出，不排名；硬性条件不满足的单列在下面，不会混进来</p></div></div>' +
       (fit.length ? fit.map(trialCard).join('') : '<div class="chart-empty"><p>当前条件下没有可对照的条目。</p></div>') +
       (bad.length ? '<details class="bad-trials"><summary>硬性条件不满足的 ' + bad.length + ' 条（点开看是哪一条挡住了）</summary>' + bad.map(trialCard).join('') + '</details>' : '');
   }
@@ -1056,8 +1083,8 @@
       if (f.scope !== 'all' && t.scope !== f.scope) return false;
       if (f.status !== 'all' && t.status !== f.status) return false;
       return true;
-    }).sort(function (a, b) { return (a.unknown - b.unknown) || (b.pct - a.pct); });
-    return '<div class="notice">检索是「按条件找」，不是「替你挑」：排序用同一套逐条对照，不改写条件，也不隐藏不符合的条目。</div>' +
+    });
+    return '<div class="notice">检索是「按条件找」，不是「替你挑」：按登记顺序列出，逐条对照三档，不改写条件，也不隐藏不符合的条目。</div>' +
       '<section class="card"><div class="card-head"><h2 class="h2">筛条件</h2><span class="muted small">只看条目本身；「与我相关」的判断在匹配页</span></div>' +
       '<div class="pref-row">' +
         '<label class="inline-field" style="flex:1 1 220px">关键词 <input id="trial-q" data-act="trial-q" value="' + esc(f.q) + '" placeholder="登记号 / 药名 / 靶点"></label>' +
@@ -1071,7 +1098,7 @@
           }).join('') + '</select></label>' +
         '<button type="button" class="btn btn-quiet" data-act="trial-reset">清空</button></div>' +
       '<p class="small-note">两者分开，是为了让你能看见"与我无关但存在"的选项。</p></section>' +
-      '<div class="section-title"><div><h2>' + list.length + ' 条结果</h2><p>按粗筛符合度排序；状态与核验日期逐条显示</p></div></div>' +
+      '<div class="section-title"><div><h2>' + list.length + ' 条结果</h2><p>按登记顺序列出；状态与核验日期逐条显示</p></div></div>' +
       (list.length ? list.map(trialCard).join('') : '<div class="chart-empty"><p>没有符合条件的条目。放宽一个筛选项再试。</p></div>');
   }
 
@@ -1109,16 +1136,16 @@
         '</div>' +
         '<h2 class="h2">' + esc(t.id) + ' · ' + esc(t.title) + '</h2>' +
         '<p class="muted small">' + esc(TRIAL_SCOPE[t.scope] || '') + ' · ' + esc((t.sites || []).map(function (x) { return x.city; }).join(' / ') || '中心待定') + '</p></div>' +
-        '<div class="fit ' + BAND[m.band][1] + '"><b>' + m.pct + '<small>%</small></b><span>粗筛符合度</span><em>' + BAND[m.band][0] + '</em></div></div>' +
+        '</div>' +
         (t.status === 'suspended' ? '<div class="notice"><b>这条已暂停招募。</b>你收藏之后状态变了，记录仍在；要不要继续等，去门诊问研究护士。</div>' : '') +
         '<h3 class="h3" style="margin:12px 0 6px">状态与中心变化</h3>' +
         '<div class="track">' + track.map(function (u) {
           return '<div class="track-row"><span class="date">' + esc(u.on) + '</span><div><b>' + esc(u.text) + '</b><small>' + esc(u.source) + '</small></div></div>';
         }).join('') + '</div>' +
-        '<div class="crit-mini">' + (unknown.length ? unknown.map(function (e) { return '<span>? ' + esc(e.text) + '</span>'; }).join('') : '<span>没有待确认项</span>') + '</div>' +
+        '<div class="crit-mini">' + (unknown.length ? unknown.map(function (e) { return '<span>? ' + esc(e.text) + '</span>'; }).join('') : '<span>没有无法判定项</span>') + '</div>' +
         '<div class="trial-actions">' +
           (f.state !== 'asking' ? '<button type="button" class="btn" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="asking">标为准备问</button>' : '') +
-          '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把待确认项加进问题清单</button>' +
+          '<button type="button" class="btn" data-act="trial-ask" data-id="' + esc(t.id) + '">把无法判定项加进问题清单</button>' +
           '<button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看条件原文与中心</button>' +
           (f.state !== 'archived' ? '<button type="button" class="btn btn-quiet" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="archived">归档</button>'
             : '<button type="button" class="btn btn-quiet" data-act="trial-state" data-id="' + esc(t.id) + '" data-state="watching">回到在跟</button>') +
@@ -1147,7 +1174,7 @@
         return '<p>' + esc(s2.city) + ' · ' + esc(s2.hospital) + ' — ' + esc(s2.contact) + ' · ' +
           (s2.status === 'open' ? '开放' : s2.status === 'planned' ? '计划启动' : '暂停') + ' · ' + esc(s2.updatedOn || '') + '</p>';
       }).join('') || '<p>中心未登记</p>') +
-      '<p class="small-note">要不要联系、能不能入组，由研究团队当面评估。工作台只把条件与记录摆在一起。</p>';
+      '<p class="small-note">要不要联系、能不能入组，由研究团队当面评估；本页不构成入组判断。工作台只把条件与记录摆在一起。</p>';
     var dlg = $('#trial-dialog');
     if (dlg) {
       $('#trial-dialog-title').textContent = t.id + ' · ' + t.title;
@@ -1161,8 +1188,8 @@
     var summary = fields.map(function (f) { return f.k + '：' + (f.v || '未记录'); }).join('；');
     var ids = allTrials().map(function (t) { return t.id + '（' + t.title + '）'; }).join(' / ');
     return '请协助我逐条比对入组档案与这些登记条目。档案摘要——' + summary + '。登记条目——' + ids +
-      '。要求：只用「符合 / 不符合 / 待确认」三档逐条列出，每条写清「记录里是」与「条件要求」；' +
-      '缺失字段一律判「待确认」；不输出匹配度百分比、不排序、不写哪条更适合我；入组判断属于医生与研究中心。';
+      '。要求：只用「符合 / 不符合 / 无法判定」三档逐条列出，每条写清「记录里是」与「条件要求」；' +
+      '缺失字段一律判「无法判定」；不输出匹配度百分比、不排序、不写哪条更适合我；入组判断属于医生与研究中心。';
   }
 
   function pageTrial() {
@@ -1171,16 +1198,19 @@
       '这里是登记摘录与逐条对照，不是招募推荐：每条条件都写清「记录里是」与「条件要求」；不给排名、不替你做决定。', backHome());
     var nav = subnav('trial', [['匹配', 'match'], ['检索', 'search'], ['收藏与跟踪', 'saved']]);
     var body = sub === 'search' ? trialSearchBody() : sub === 'saved' ? trialSavedBody() : trialMatchBody();
+    var foot = '<footer class="trial-foot">来源：' + esc(D.trialSourceLabel) + ' · 快照 ' + esc(D.trialSnapshot) +
+      ' · 库内 ' + esc(String(D.trialLibraryCount)) + ' 条，本页演示 ' + (D.trials || []).length + ' 条（演示虚构，不是真实在招试验）。' +
+      '三档只说明记录与登记条件的比对结果，不构成入组判断；入组由医生与研究中心当面评估。</footer>';
     var dlg = '<dialog id="trial-dialog" class="modal"><div class="modal-head"><h2 class="h2" id="trial-dialog-title"></h2>' +
       '<button type="button" class="btn" data-act="close-trial-dialog">关闭</button></div>' +
       '<div class="modal-body" id="trial-dialog-body"></div></dialog>';
-    return head + nav + body + dlg;
+    return head + nav + body + foot + dlg;
   }
 
   /* ---- 共病与在用药 comorb ---- */
   function pageComorb() {
     return pageHead('共病与在用药', 'CIRS 条目照抄',
-      '老年语境：条目照抄不换算；在用药清单联查；无相互作用判读。', backHome() + aiBtn('帮我核对我拍的病历里 CIRS 条目候选（核对后我才保存）')) +
+      '老年语境：条目照抄不换算；在用药清单联查；无相互作用判读。', backHome()) +
       '<section class="card"><div class="card-head"><h2 class="h2">共病（CIRS）</h2>' + moreMenu([['new-comorb', '记共病/在用药'], ['edit-comorb', '改这一条']]) + '</div>' +
       '<div class="table-wrap"><table><thead><tr><th>系统</th><th>分级（原文）</th><th>日期</th></tr></thead><tbody>' +
       D.cirs.map(function (c) { return '<tr><td>' + esc(c.system) + '</td><td>' + esc(c.raw) + '</td><td>' + c.d + '</td></tr>'; }).join('') +
@@ -1193,7 +1223,7 @@
   /* ---- 营养与感染预防 nutr ---- */
   function pageNutr() {
     return pageHead('营养与感染预防', '词表与就诊要问',
-      '感染预防语境按当前用药过滤；只列事实与问题模板，不给处置。', backHome() + aiBtn('帮我把最近记录的体温和体重整理成一段（只整理数值与日期）')) +
+      '感染预防语境按当前用药过滤；只列事实与问题模板，不给处置。', backHome()) +
       '<section class="card"><div class="card-head"><h2 class="h2">词表卡（按当前用药）</h2>' + badge('零处置') + '</div>' +
       '<p><b>BTKi 语境</b>：出血/瘀青、感染/发热、房颤/心悸、高血压——这些词只用于记录与就诊提问，不用于判断轻重。</p>' +
       '<p><b>BCL-2i 语境（TLS 预防）</b>：TLS（肿瘤溶解）相关词表作「就诊要问」语境：开始前如何分层、饮水与检验安排由医生定。</p></section>' +
@@ -1206,7 +1236,7 @@
   function pageMind() {
     var kept = filterPrivate(D.mood, 'summary');
     return pageHead('心理支持', 'W&W 的「在等什么」',
-      'W&W 期焦虑是常见语境；本页只做记录与陪同语料，私密条目不进导出与 AI。', backHome() + aiBtn('帮我把这条情绪记录改写成一句对医生说的话（不改写事实）')) +
+      'W&W 期焦虑是常见语境；本页只做记录与陪同语料，私密条目不进导出与 AI。', backHome()) +
       '<section class="card private-card"><div class="card-head"><h2 class="h2">情绪记录（私密）</h2>' + badge('私密 · 三出口过滤') + '</div>' +
       '<ul class="timeline">' + D.mood.map(function (m) {
         return '<li><b>' + m.d + '</b> · ' + esc(m.note) + (m.visibility === 'private' ? ' ' + badge('私密', 'grey') : '') + '</li>';
@@ -1224,7 +1254,7 @@
         '<span class="ind-text">' + esc(t) + '</span></li>';
     }).join('');
     return pageHead('复诊准备', '触发词表与资料包',
-      '治疗指征八条照抄（含来源版本）；勾选「我想问的」生成问题清单；资料包导出经 private 三出口过滤。', backHome() + aiBtn('根据我勾选的「我想问的」条目，帮我起草一份就诊提问清单（只做提问句，不给判断）', 'AI 起草问题清单')) +
+      '治疗指征八条照抄（含来源版本）；勾选「我想问的」生成问题清单；资料包导出经 private 三出口过滤。', backHome()) +
       '<section class="card"><div class="card-head"><h2 class="h2">触发词表卡（治疗指征八条照抄）</h2>' + badge('照抄 + 勾选提问') + '</div>' +
       '<ol class="ind-list">' + ind + '</ol>' +
       '<p class="muted">来源版本：' + esc(D.indicationSource) + '。本表只照抄与勾选提问，不做任何「是否够指征」的判定（无判定类勾选框）。</p></section>' +
@@ -1281,6 +1311,8 @@
     switch (act) {
       case 'agent-draft': agentDraft(el.getAttribute('data-prompt') || ''); break;
       case 'go-dash': location.hash = '#dash'; break;
+      case 'go-records': location.hash = '#records'; break;
+      case 'go-labs': location.hash = '#labs'; break;
       case 'go-ww': location.hash = '#ww'; break;
       case 'go-ww-trend': location.hash = '#ww'; window.scrollTo(0, 300); break;
       case 'go-checkin': location.hash = '#med/checkin'; break;
@@ -1350,9 +1382,9 @@
         var m0 = trialMatches().filter(function (x) { return x.t.id === tid; })[0];
         var pend = m0 ? m0.evals.filter(function (e) { return e.state === 'undetermined'; }) : [];
         pend.forEach(function (e) {
-          state.extra.questions.push({ q: '【' + tid + '】' + e.text + '：我这种情况是否满足？（记录里是：' + e.mine + '）', d: '2026-10-25', from: '试验待确认项' });
+          state.extra.questions.push({ q: '【' + tid + '】' + e.text + '：我这种情况是否满足？（记录里是：' + e.mine + '）', d: '2026-10-25', from: '试验无法判定项' });
         });
-        toast(pend.length ? '已把 ' + pend.length + ' 条待确认项加进问题清单' : '这条没有待确认项');
+        toast(pend.length ? '已把 ' + pend.length + ' 条无法判定项加进问题清单' : '这条没有无法判定项');
         break;
       }
       case 'trial-detail': trialDetail(el.getAttribute('data-id')); break;
@@ -1499,7 +1531,7 @@
     if (pre) {
       var k = pre.getAttribute('data-key');
       state.trialPrefs[k] = pre.type === 'checkbox' ? pre.checked : pre.value;
-      toast('偏好只影响提示与排序，不改变「符合 / 不符合」的判断');
+      toast('偏好只作就诊提问的提醒，不参与医学条件判断');
       render();
       return;
     }
@@ -1540,13 +1572,6 @@
   window.addEventListener('resize', function () { if (state.route.view === 'onechart') applyOnechartLayout(); });
   window.addEventListener('DOMContentLoaded', function () {
     $('#view-sub-count').textContent = VIEW_SUBS.length; /* 自检计数（页脚常显） */
-    /* 顶栏状态：装进 Desktop 时由宿主原生会话承担；独立打开如实说明 */
-    (function () {
-      var framed = false;
-      try { framed = window.parent && window.parent !== window; } catch (e) { framed = false; }
-      var note = $('#agent-note');
-      if (note) note.textContent = framed ? 'AI 对话在右侧原生会话' : '独立打开：无 AI 会话（装进 Desktop 后可用）';
-    })();
     render();
   });
   if (document.readyState !== 'loading') {
