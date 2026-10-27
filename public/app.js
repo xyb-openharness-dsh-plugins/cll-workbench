@@ -3,7 +3,7 @@
    红线：不判读、不建议、不代发；删除=改这一条；页面只发 cll:agent-draft 给宿主原生会话。 */
 (function () {
   'use strict';
-  var APP_INFO = { version: '0.9.4' };
+  var APP_INFO = { version: '0.9.5' };
   var D = window.LYMPAL_DEMO;
 
   function loadProfile() {
