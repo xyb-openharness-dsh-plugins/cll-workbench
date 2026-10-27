@@ -509,6 +509,31 @@
 
   /* ================= 各页面 ================= */
 
+  /* 36 号 §2.6 · 看板状态卡四件：eyebrow / 锚点派生天数 / 现状行 / 出口按钮排。
+     天数一律由锚点日（此处 = 启动治疗日）计算，不手填；没有锚点时整卡显示「待初始化」。 */
+  function dashStatusCard(today) {
+    var rx = (D.rxChanges || [])[0] || null;
+    var anchor = rx && rx.start ? rx.start : '';
+    var out = '<section class="card status-card" aria-label="病程状态卡">';
+    if (!anchor) {
+      out += '<p class="status-eyebrow">状态卡 · 待初始化</p>' +
+        '<p class="status-day"><b>待初始化</b></p>' +
+        '<p class="status-now">还没有锚点日（例如启动治疗日）。先完成三步初始化，天数才会出现。</p>' +
+        '<div class="status-actions">' +
+        '<button type="button" class="btn btn-primary" data-act="go-settings">去三步向导</button>' +
+        '<button type="button" class="btn" data-primer-open>疾病概要：CLL/SLL 是什么？</button></div>';
+    } else {
+      var day = Math.max(0, Math.floor((new Date(today + 'T00:00:00') - new Date(anchor + 'T00:00:00')) / 86400000));
+      out += '<p class="status-eyebrow">D+' + day + ' 状态卡 · 距下次复查</p>' +
+        '<p class="status-day"><b>第 ' + day + ' 天</b><span class="status-anchor">锚点：' + esc(anchor) + ' 启动 BTKi（照抄医嘱）</span></p>' +
+        '<p class="status-now">BTKi 持续治疗（' + esc(rx.drug) + ' ' + esc(rx.dose) + '） · 用药中 · 下次：待录入（复查安排未在本机记录）</p>' +
+        '<div class="status-actions">' +
+        '<button type="button" class="btn btn-primary" data-act="go-med-log">看口服药日志（按天）→</button>' +
+        '<button type="button" class="btn" data-primer-open>疾病概要：CLL/SLL 是什么？</button></div>';
+    }
+    return out + '</section>';
+  }
+
   /* ---- 看板（入口文案与 INTERACTION-DESIGN §二逐字一致，IP3） ---- */
   function pageDash() {
     var c = cbcAll(), last = c[c.length - 1], L = ldtDays();
@@ -524,6 +549,7 @@
     var html = pageHead('看板', '今天先看哪一块',
       '小淋宝只做整理与照抄，不给结论；所有判定都在诊室里完成。',
       aiBtn('帮我把最近的复查数值整理成一段给医生看的清单（只整理，不判读）'));
+    html += dashStatusCard(today);
     html += '<div class="dash-grid">' +
       entryCard('观察与等待', entryBtn('go-ww', '记一次血常规', true) + entryBtn('go-ww-trend', '看淋巴细胞趋势'),
         'W&W 速览：最近 ALC ' + last.alc + ' ×10⁹/L（' + fmtD(last.d) + '）' + (L ? ' · LDT ' + L.days + ' 天（只算天数）' : '')) +
@@ -1239,6 +1265,8 @@
       case 'go-prep': location.hash = '#prep'; break;
       case 'go-gene': location.hash = '#gene'; break;
       case 'go-mrd': location.hash = '#labs'; window.scrollTo(0, document.body.scrollHeight); break;
+      case 'go-med-log': location.hash = '#med'; break;
+      case 'go-settings': location.hash = '#settings'; break;
       case 'flip': {
         var code = el.getAttribute('data-code');
         /* 点击只改属性不重绘（27 号 JS 三条） */
@@ -1477,7 +1505,13 @@
   }
 
   /* ================= 启动 ================= */
-  window.addEventListener('hashchange', render);
+  window.addEventListener('hashchange', function () {
+    /* 36 号：疾病概要 open 走 pushState、close 走 history.back()。关闭后焦点已由浮窗
+       还给 [data-primer-open]，此时不要再重渲染看板——否则会抢焦点并把滚动位置清 0。 */
+    var ae = document.activeElement;
+    if (ae && ae.closest && ae.closest('[data-primer-open]')) return;
+    render();
+  });
   window.addEventListener('resize', function () { if (state.route.view === 'onechart') applyOnechartLayout(); });
   window.addEventListener('DOMContentLoaded', function () {
     $('#view-sub-count').textContent = VIEW_SUBS.length; /* 自检计数（页脚常显） */

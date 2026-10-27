@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.9.2</title>
+<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.9.3</title>
 <link rel="stylesheet" href="style.css?v=0.9.0">
+<link rel="stylesheet" href="primer.css">
 </head>
 <body>
 
@@ -21,9 +22,12 @@
     </svg>
     <span class="brand-word">小淋宝</span>
     <span class="brand-latin">LymPal</span>
-    <span class="ver">v0.9.2</span>
+    <span class="ver">v0.9.3</span>
   </a>
   <div class="topbar-right">
+    <button type="button" class="dp-trigger" data-primer-open
+            aria-label="疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势"
+            title="疾病概要：定义 · 指南 · 治疗全景 · 趋势">?</button>
     <span class="conn" id="agent-note">AI 对话在右侧原生会话</span>
     <button type="button" class="btn btn-discuss-top" data-act="discuss"
             aria-label="和 AI 讨论：把本页关键信息发到 AI 对话">和 AI 讨论</button>
@@ -60,7 +64,7 @@
 
 <!-- 页脚贴底：flex column + min-height:100vh；版本 + (view,sub) 计数常显 -->
 <footer class="footer">
-  <span>小淋宝 LymPal <b class="ver">v0.9.2</b></span>
+  <span>小淋宝 LymPal <b class="ver">v0.9.3</b></span>
   <span>构建日：2026-10-25</span>
   <span>一级页 13 · (view,sub) <b id="view-sub-count">19</b></span>
   <span>数据目录：~/LymPal/病历资料 · 已挂载（本机，演示只读）</span>
@@ -71,5 +75,8 @@
 
 <script src="demo-data.js?v=0.9.0"></script>
 <script src="app.js?v=0.9.0"></script>
+<!-- 36 号疾病概要：数据必须先于模块加载 -->
+<script src="primer-data.js"></script>
+<script src="primer.js"></script>
 </body>
 </html>

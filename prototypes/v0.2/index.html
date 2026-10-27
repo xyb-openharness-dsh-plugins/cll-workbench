@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.1.0</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="primer.css">
 </head>
 <body>
 
@@ -14,6 +15,9 @@
 <header class="topbar">
   <a class="brand" href="#dash">小淋宝 LymPal <span class="ver">v0.1.0</span></a>
   <div class="topbar-right">
+    <button type="button" class="dp-trigger" data-primer-open
+            aria-label="疾病概要：定义、医学资料与指南情况、治疗全景、发展趋势"
+            title="疾病概要：定义 · 指南 · 治疗全景 · 趋势">?</button>
     <span class="conn">AI 对话：未连接（原型演示）</span>
     <button type="button" class="btn" data-act="panel-toggle" aria-controls="session" aria-expanded="true">收起会话区</button>
   </div>
@@ -77,5 +81,8 @@
 
 <script src="demo-data.js"></script>
 <script src="app.js"></script>
+<!-- 36 号疾病概要：数据必须先于模块加载 -->
+<script src="primer-data.js"></script>
+<script src="primer.js"></script>
 </body>
 </html>

@@ -301,3 +301,16 @@ dialog.modal::backdrop{background:rgba(44,42,58,.35); backdrop-filter:blur(2px)}
   .dash-grid,.metric-grid,.phase-detail,.form5,.form6,.ldt-pair{grid-template-columns:minmax(0,1fr)}
   .chart-wrap{overflow-x:auto}
 }
+
+/* ---- 36 号 · 看板状态卡（§2.6 四件：eyebrow / 锚点派生天数 / 现状行 / 出口按钮排） ---- */
+.status-card{display:flex; flex-direction:column; gap:8px; margin:0 0 14px; padding:16px 18px;
+  background:var(--surface); border:1px solid var(--line);
+  border-left:3px solid var(--chart-hue, var(--brand-deep, #4a4494));
+  border-radius:var(--radius, 14px)}
+.status-eyebrow{margin:0; font-size:12px; letter-spacing:.04em; color:var(--muted)}
+.status-day{margin:0; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.status-day b{font-size:28px; line-height:1.15; color:var(--chart-hue-deep, var(--brand-deep, #4a4494));
+  font-family:var(--font-mono, ui-monospace, monospace); font-variant-numeric:tabular-nums}
+.status-anchor{font-size:12px; color:var(--muted)}
+.status-now{margin:0; font-size:13px; line-height:1.6; color:var(--ink-2)}
+.status-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:2px}

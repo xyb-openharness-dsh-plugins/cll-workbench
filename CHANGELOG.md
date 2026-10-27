@@ -1,3 +1,27 @@
+## v0.9.3 · 2026-10-27（包版本 0.9.3）
+
+36 号疾病概要 v2 从零引入（四段浮窗 + 指南可点链接 + 看板状态卡）。
+
+### 一、疾病概要四段（定义 / 医学资料规范和指南情况 / 治疗全景 / 发展趋势）
+- 新增 `primer.js`、`primer.css`（取自 starter `assets/patterns/`，含 §2.5 链接渲染与 §4.3 排版）与 `primer-data.js`
+  （`window.DISEASE_PRIMER`，四段固定顺序，内容只取自本仓 README / docs / research）。
+- 顶栏「?」入口：原型 `prototypes/v0.2/`、对齐副本 `prototypes/v0.1/` 与**装机层 `public/`** 同步挂载。
+- 链接 3 条经 `verify-links.mjs` 实测 OK：NCCN CLL/SLL 官方入口页（`entry`，需自行注册）、
+  iwCLL 2008 PMC 全文、NCI PDQ 全文页。2025 中国指南的 PMC/DOI 验链返回 203/THIN，
+  如实记 `nolink` + 原因，未编 URL。
+- 新增 `scripts/check-primer-links.mjs`（L1–L12 静态断言），已接入 `npm run check`。
+
+### 二、看板状态卡（§2.6 四件）
+- eyebrow（`D+N 状态卡 · 距下次复查`）、锚点派生大字天数（锚点 = 启动治疗日 2026-06-01，天数由 JS 计算不手填；
+  无锚点显示「待初始化」）、现状行（阶段 + 状态 + 下次事项）、出口按钮排
+  （主按钮进口服药日志 + 副按钮「疾病概要：CLL/SLL 是什么？」）。
+- 关闭浮窗走 `history.back()` 时不再重渲染看板，焦点与滚动位置保持不变。
+
+### 验证
+- `probe-disease-primer.mjs`：原型 10/10、装机层 `public/` 10/10。
+- `check-primer-links.mjs`：25 项结构，24 通过、0 失败（1 条 nolink 有说明）。
+- `npm run check` 全绿（test 44/44）。
+
 ## v0.9.2 · 2026-10-26（包版本 0.9.2）
 
 两件事：主色定薄荷绿；病情整理页从"文字表格堆积"改为**胶囊 + 时间轴**。
