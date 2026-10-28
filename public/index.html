@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.9.5</title>
+<title>小淋宝 LymPal · CLL/SLL 患者工作台 v0.9.6</title>
 <link rel="stylesheet" href="style.css?v=0.9.0">
 <link rel="stylesheet" href="primer.css">
 </head>
@@ -22,7 +22,7 @@
     </svg>
     <span class="brand-word">小淋宝</span>
     <span class="brand-latin">LymPal</span>
-    <span class="ver">v0.9.5</span>
+    <span class="ver">v0.9.6</span>
   </a>
   <div class="topbar-right">
     <button type="button" class="dp-trigger" data-primer-open
@@ -35,23 +35,52 @@
 
 <div class="app" id="app">
 
-  <!-- 一级页导航（13 条；view id 与 docs/INTERACTION-DESIGN.md §二一致） -->
+  <!-- 一级页导航（14 条，按「今天 / 我的资料 / 治疗与随访 / 生活与准备 / 系统」分组；
+       view id 与 docs/INTERACTION-DESIGN.md §二一致；分组只改层级，不删任何入口） -->
   <nav class="sidebar" aria-label="一级页面">
     <ul id="navList">
-      <li><a href="#dash" data-route="dash">看板</a></li>
-      <li><a href="#records" data-route="records">病情整理</a></li>
-      <li><a href="#ww" data-route="ww">观察与等待</a></li>
-      <li><a href="#labs" data-route="labs">指标检测</a></li>
-      <li><a href="#onechart" data-route="onechart">病情一图秀</a></li>
-      <li><a href="#gene" data-route="gene">基因与预后档案</a></li>
-      <li><a href="#med" data-route="med">口服药与治疗</a></li>
-      <li><a href="#trial" data-route="trial">临床研究</a></li>
-      <li><a href="#comorb" data-route="comorb">共病与在用药</a></li>
-      <li><a href="#nutr" data-route="nutr">营养与感染预防</a></li>
-      <li><a href="#mind" data-route="mind">心理支持</a></li>
-      <li><a href="#prep" data-route="prep">复诊准备</a></li>
-      <li><a href="#settings" data-route="settings">设置</a></li>
+      <li class="nav-group">
+        <p class="nav-group-label">今天</p>
+        <ul class="nav-sublist">
+          <li><a href="#dash" data-route="dash"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 8l8-6 8 6v9H2zM7 17v-6h6v6"/></svg><span>看板</span></a></li>
+        </ul>
+      </li>
+      <li class="nav-group">
+        <p class="nav-group-label">我的资料</p>
+        <ul class="nav-sublist">
+          <li><a href="#records" data-route="records"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 2h8l4 4v12H4zM12 2v4h4"/></svg><span>病情整理</span></a></li>
+          <li><a href="#labs" data-route="labs"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 2h8M9 2v5l-5 8a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-5-8V2"/></svg><span>指标检测</span></a></li>
+          <li><a href="#onechart" data-route="onechart"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 15l4-6 3 3 4-8 4 5"/></svg><span>病情一图秀</span></a></li>
+          <li><a href="#gene" data-route="gene"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 2c0 6 10 6 10 12M15 2c0 6-10 6-10 12M6 5h8M6 13h8"/></svg><span>基因与预后档案</span></a></li>
+        </ul>
+      </li>
+      <li class="nav-group">
+        <p class="nav-group-label">治疗与随访</p>
+        <ul class="nav-sublist">
+          <li><a href="#ww" data-route="ww"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM10 6v4l3 2"/></svg><span>观察与等待</span></a></li>
+          <li><a href="#med" data-route="med"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 14a4 4 0 0 1 0-6l6-4a4 4 0 0 1 6 6l-6 4a4 4 0 0 1-6 0z"/></svg><span>口服药与治疗</span></a></li>
+          <li><a href="#comorb" data-route="comorb"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 8a3 3 0 1 0 0-1M2 15c0-3 2-5 4-5s4 2 4 5M13 7a3 3 0 1 0 0-1M11 15c0-3 2-4 4-4s3 2 3 4"/></svg><span>共病与在用药</span></a></li>
+          <li><a href="#trials" data-route="trials"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 3a6 6 0 1 0 0 12A6 6 0 0 0 9 3zM13.5 13.5L17 17"/></svg><span>临床试验</span></a></li>
+          <li><a href="#trial" data-route="trial"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z"/></svg><span>临床研究</span></a></li>
+        </ul>
+      </li>
+      <li class="nav-group">
+        <p class="nav-group-label">生活与准备</p>
+        <ul class="nav-sublist">
+          <li><a href="#nutr" data-route="nutr"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 3C7 3 3 7 3 14h8c5 0 8-4 8-11z M5 16l6-6"/></svg><span>营养与感染预防</span></a></li>
+          <li><a href="#mind" data-route="mind"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 15S3 10 3 6a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4-7 9-7 9z"/></svg><span>心理支持</span></a></li>
+          <li><a href="#prep" data-route="prep"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 9l4 4 8-9"/></svg><span>复诊准备</span></a></li>
+        </ul>
+      </li>
+      <li class="nav-group">
+        <p class="nav-group-label">系统</p>
+        <ul class="nav-sublist">
+          <li><a href="#settings" data-route="settings"><svg class="nic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3h4l1 2 2 1-1 2 1 2-2 1-1 2H8L7 11 5 10l1-2-1-2 2-1zM10 9a1.5 1.5 0 1 0 0 1"/></svg><span>设置</span></a></li>
+        </ul>
+      </li>
     </ul>
+    <!-- 二级页签停靠位：宽屏隐藏（二级留在页内），窄屏提到导航下方一行 -->
+    <div id="subnav-dock" aria-label="二级页面" aria-hidden="true"></div>
     <p class="nav-note">小淋宝只做整理与照抄；判定都在诊室。隐藏面板不清空草稿。</p>
   </nav>
 
@@ -63,9 +92,9 @@
 
 <!-- 页脚贴底：flex column + min-height:100vh；版本 + (view,sub) 计数常显 -->
 <footer class="footer">
-  <span>小淋宝 LymPal <b class="ver">v0.9.5</b></span>
+  <span>小淋宝 LymPal <b class="ver">v0.9.6</b></span>
   <span>构建日：2026-10-25</span>
-  <span>一级页 13 · (view,sub) <b id="view-sub-count">19</b></span>
+  <span>一级页 14 · (view,sub) <b id="view-sub-count">22</b></span>
   <span>数据目录：~/LymPal/病历资料 · 已挂载（本机，演示只读）</span>
   <span>本原型不构成诊疗意见；数值与文案照抄演示数据。</span>
 </footer>

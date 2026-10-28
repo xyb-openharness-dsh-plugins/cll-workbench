@@ -51,16 +51,16 @@
     toast._h = setTimeout(function () { t.setAttribute('hidden', ''); }, 3200);
   }
 
-  /* ================= 路由（13 一级页；med/trial/records 带二级） ================= */
-  var VIEWS = ['dash', 'records', 'ww', 'labs', 'onechart', 'gene', 'med', 'trial', 'comorb', 'nutr', 'mind', 'prep', 'settings'];
+  /* ================= 路由（14 一级页；med/trial/records 带二级） ================= */
+  var VIEWS = ['dash', 'records', 'ww', 'labs', 'onechart', 'gene', 'med', 'trials', 'trial', 'comorb', 'nutr', 'mind', 'prep', 'settings'];
   var SUBS = {
     records: ['main', 'docs'],
     med: ['overview', 'checkin', 'calendar', 'rx', 'ae'],
     trial: ['match', 'search', 'saved']
   };
-  /* 全部 (view, sub) 19 条——自检穷举用 */
+  /* 全部 (view, sub) 自检穷举用（trials 为单页，无二级） */
   var VIEW_SUBS = ['dash', 'records', 'records/docs', 'ww', 'labs', 'onechart', 'gene', 'med',
-    'med/checkin', 'med/calendar', 'med/rx', 'med/ae', 'trial', 'trial/match', 'trial/search', 'trial/saved',
+    'med/checkin', 'med/calendar', 'med/rx', 'med/ae', 'trials', 'trial', 'trial/match', 'trial/search', 'trial/saved',
     'comorb', 'nutr', 'mind', 'prep', 'settings'];
 
   function parseHash() {
@@ -73,13 +73,37 @@
     return { view: view, sub: sub };
   }
 
+  /* 一图秀指标选择持久化：沿用客户端那边的 localStorage 约定（键带版本，隐私模式静默失败）。
+     刷新后仍然保持「看哪几条线 + 时间范围」，不把勾选状态丢掉。 */
+  var CHART_STORE_KEY = 'cll:onechart:v1';
+  function loadChartState() {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem(CHART_STORE_KEY);
+      var saved = raw ? JSON.parse(raw) : null;
+      if (!saved || typeof saved !== 'object') return null;
+      var sel = Array.isArray(saved.sel) ? saved.sel.filter(function (c) { return typeof c === 'string'; }) : [];
+      var seen = {};
+      sel = sel.filter(function (c) { return seen[c] ? false : (seen[c] = 1); }).slice(0, 4);
+      var range = ['3m', '6m', '12m', 'all'].indexOf(saved.range) >= 0 ? saved.range : 'all';
+      return { sel: sel.length ? sel : null, range: range };
+    } catch (e) { return null; }
+  }
+  function saveChartState() {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(CHART_STORE_KEY, JSON.stringify({ sel: state.chart.sel, range: state.chart.range }));
+    } catch (e) { /* 隐私模式 / 存储被禁用：只是不持久化，功能仍可用 */ }
+  }
+  var savedChart = loadChartState();
+
   /* ================= 全局状态（内存态，刷新回演示数据） ================= */
   var state = {
     route: parseHash(),
     flipped: new Set(),          /* 指标卡翻面，存 key（27 号：状态存 key 不存 DOM） */
-    chart: { sel: ['alc', 'hgb'], range: 'all', tx: true, pin: null, pinOn: true }, /* 一图秀 */
+    chart: { sel: (savedChart && savedChart.sel) || ['alc', 'hgb'], range: (savedChart && savedChart.range) || 'all', tx: true, pin: null, pinOn: true }, /* 一图秀 */
     asked: {},                   /* 触发词表勾选"我想问的" */
-    onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开 */
+    onechartSideOpen: true,      /* 一图秀左栏（指标选择区）是否展开（自动收起前的用户选择） */
+    onechartSideOverride: null,  /* null=按容器宽度自动；'open'/'closed'=用户手动点过，手动优先 */
     trialFilter2: { q: '', scope: 'all', status: 'all' }, /* 检索页筛选 */
     trialPrefs: { biopsy: false, placebo: false, city: 'all' }, /* 我的偏好：不参与医学判断 */
     trialFavs: [],                /* 收藏：[{id,state,savedOn,note}] state=watching|asking|archived */
@@ -498,6 +522,7 @@
       med: sub === 'ae' ? '副作用记录 ' + D.ae.length + ' 条（词表按当前用药过滤）。'
         : '当前用药：泽布替尼 160mg 每日两次（' + D.rxChanges.length + ' 次处方变更）；打卡记录见依从日历。',
       trial: '本地试验快照 ' + D.trials.length + ' 条（登记状态，未核实）；分层线索见匹配页。',
+      trials: '本地试验快照 ' + D.trials.length + ' 条（快照 ' + D.trialSnapshot + '，登记状态未核实）；三态总览只写记录能不能对上，不给评分。',
       comorb: 'CIRS 条目 ' + ((D.cirs||[]).length) + ' 条；在用药 ' + ((D.conmeds||[]).length) + ' 种（照抄，无相互作用判读）。',
       nutr: '感染预防与营养语境条目（就诊要问清单）。',
       mind: '心理记录 ' + filterPrivate(D.mood, 'ai').length + ' 条（私密条目默认不进 AI 上下文）。',
@@ -597,8 +622,8 @@
         '最近一条：' + esc(D.ae[0].d + ' ' + D.ae[0].term) + '（词表按当前用药过滤）') +
       entryCard('基因与 MRD', entryBtn('go-gene', '补一条基因结果', true) + entryBtn('go-mrd', '记一次 MRD 结果'),
         'FISH/TP53/IGHV 三态档案；MRD 原文照抄。') +
-      entryCard('临床研究', entryBtn('go-trial-match', '按记录逐条对照', true),
-        '三档（符合／不符合／无法判定）+ 证据链；不算符合度、不排名。') +
+      entryCard('临床试验与临床研究', entryBtn('go-trials', '三态总览', true) + entryBtn('go-trial-match', '按记录逐条对照'),
+        '命中／无法自动匹配／不适用 + 登记来源与快照；不算分、不排名。') +
       entryCard('复诊准备', entryBtn('go-prep', '准备复诊', true), '选区间、勾线、生成资料包与问题清单。') +
       entryCard('病情整理', entryBtn('go-records', '整理病历资料', true), '原件在本机目录；候选逐项核对后才入事实层。') +
       '</div>';
@@ -721,15 +746,27 @@
   }
 
   /* ---- 病情一图秀 onechart（主图优先；左栏控制可折叠，AI 对话栏打开时自动收起） ---- */
+  /* 左栏是否收起：用户手动点过就听用户的（手动优先），没点过才按容器宽度自动收起。
+     旧实现把「宽度 < 860」直接写死成收起，手动「展开」在窄业务区里会被同一次调用立刻收回去。 */
+  function onechartCollapsed(w) {
+    if (state.onechartSideOverride === 'open') return false;
+    if (state.onechartSideOverride === 'closed') return true;
+    return (typeof w === 'number' && w < 860) || !state.onechartSideOpen;
+  }
+  function chartSelSummary() {
+    return '已选 ' + state.chart.sel.length + ' 条：' +
+      (state.chart.sel.map(function (c) { var m = metricByCode(c); return m ? mShort(m) : c; }).join('、') || '（无）');
+  }
   function pageOnechart() {
     var st = state.chart;
     var ranges = [['3m', '近 3 月'], ['6m', '近 6 月'], ['12m', '近 12 月'], ['all', '全部']];
     var rangeLabel = (ranges.filter(function (r) { return r[0] === st.range; })[0] || ['', '全部'])[1];
+    var collapsed = onechartCollapsed();
     var head = pageHead('病情一图秀', '一图看变化',
       '每条线按自身范围缩放，不同指标数值不可比；图不判读。指标越多，越建议用「收起指标」腾出图区。',
       backHome() +
-      '<button type="button" class="btn" data-act="toggle-onechart-side" aria-expanded="' + (state.onechartSideOpen ? 'true' : 'false') + '" aria-controls="onechart-side">' +
-      (state.onechartSideOpen ? '收起指标' : '展开指标') + '</button>');
+      '<button type="button" class="btn" data-act="toggle-onechart-side" data-role="onechart-toggle-head" aria-expanded="' + (collapsed ? 'false' : 'true') + '" aria-controls="onechart-side">' +
+      (collapsed ? '展开指标' : '收起指标') + '</button>');
 
     var groups = D.SERIES_ORDER.map(function (s) {
       var ms = metrics().filter(function (m) { return m.series === s; });
@@ -758,10 +795,10 @@
 
     /* 收起态：只留一条"已选指标"摘要条，点开即展开（主图优先） */
     var collapsedBar = '<div class="onechart-collapsed" id="onechart-collapsed">' +
-      '<span class="oc-sum">已选 ' + st.sel.length + ' 条：' + (st.sel.map(function (c) { var m = metricByCode(c); return m ? mShort(m) : c; }).join('、') || '（无）') + '</span>' +
-      '<button type="button" class="btn btn-quiet" data-act="toggle-onechart-side">展开指标选择</button></div>';
+      '<span class="oc-sum">' + esc(chartSelSummary()) + '</span>' +
+      '<button type="button" class="btn btn-quiet" data-act="toggle-onechart-side" data-role="onechart-toggle-bar" aria-expanded="false" aria-controls="onechart-side">展开指标选择</button></div>';
 
-    var body = '<div class="onechart-layout' + (state.onechartSideOpen ? '' : ' side-collapsed') + '">' +
+    var body = '<div class="onechart-layout' + (collapsed ? ' side-collapsed' : '') + '">' +
       aside + collapsedBar +
       '<section class="card onechart-main"><div class="card-head"><h2 class="h2">叠看</h2>' +
       '<span class="muted small" id="chart-sub">已选 ' + st.sel.length + ' 条 · ' + rangeLabel + '</span></div>' +
@@ -771,23 +808,24 @@
     return head + body;
   }
 
-  /* 主图优先：容器变窄（AI 对话栏打开/窗口变窄）时自动收起左栏；恢复宽屏时按用户选择还原。 */
+  /* 主图优先：容器变窄（AI 对话栏打开/窗口变窄）时自动收起左栏；
+     用户手动点过「展开/收起」后以手动选择为准（否则窄容器里永远展不开）。 */
   function applyOnechartLayout() {
     var layout = $('.onechart-layout');
     if (!layout) return;
     var wrap = layout.closest('#view') || layout;
-    var w = wrap.getBoundingClientRect().width;
-    /* 业务区宽度 < 860px 时自动收起指标选择区：图区优先（AI 对话栏打开后业务区约 710px） */
-    var auto = w < 860;
-    layout.classList.toggle('side-collapsed', auto || !state.onechartSideOpen);
-    layout.classList.toggle('auto-collapsed', auto);
-    var btn = $('[data-act="toggle-onechart-side"]');
-    if (btn) {
-      btn.textContent = layout.classList.contains('side-collapsed') ? '展开指标' : '收起指标';
-      btn.setAttribute('aria-expanded', String(!layout.classList.contains('side-collapsed')));
-    }
-    var bar = $('#onechart-collapsed .oc-sum');
-    if (bar) bar.textContent = '已选 ' + state.chart.sel.length + ' 条：' + (state.chart.sel.map(function (c) { var m = metricByCode(c); return m ? mShort(m) : c; }).join('、') || '（无）');
+    var w = wrap.getBoundingClientRect ? wrap.getBoundingClientRect().width : 0;
+    var collapsed = onechartCollapsed(w);
+    layout.classList.toggle('side-collapsed', collapsed);
+    layout.classList.toggle('auto-collapsed', collapsed && state.onechartSideOverride === null);
+    var open = !collapsed;
+    $all('[data-act="toggle-onechart-side"]').forEach(function (btn) {
+      var bar = btn.getAttribute('data-role') === 'onechart-toggle-bar';
+      btn.textContent = open ? '收起指标' : (bar ? '展开指标选择' : '展开指标');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    var sum = $('#onechart-collapsed .oc-sum');
+    if (sum) sum.textContent = chartSelSummary();
   }
 
   /* ---- 基因与预后档案 gene ---- */
@@ -1207,6 +1245,103 @@
     return head + nav + body + foot + dlg;
   }
 
+  /* ---- 临床试验 trials（一级入口：三态总览；旧「临床研究」保留逐条对照） ----
+     三态口径沿用 35 号 §三 / 25 号 L2-3：
+       命中         记录里有疾病相关字段能和登记条件对上（≥1 条，且没有硬性条件与记录冲突）
+       无法自动匹配  除年龄等通用条件外本地缺结构化字段（ECOG / uMRD 等）→ 逐条写缺什么，不判成"不适用"
+       不适用       登记条件与记录里的值明确不一致 → 只照抄两边原文；说的是"这条条件"，不是你
+     不产出评分、符合度百分比、排名；登记来源与快照日期常显。 */
+  var TRIAL_STATE = {
+    hit: { label: '命中', cls: 'ok', note: '命中说的是「这条登记条件在记录里对得上」，不等于你适合参加；年龄这类通用条件不算命中证据。' },
+    unmatched: { label: '无法自动匹配', cls: 'q', note: '除年龄等通用条件外，本地没有可对照的结构化字段；只写缺哪一项，不当成符合，也不当成不适合。' },
+    na: { label: '不适用', cls: 'no', note: '「不适用」说的是这条登记条件，不是说你；能不能入组由研究团队评估。' }
+  };
+  /* 命中证据只认疾病相关条件（诊断/基因/既往治疗/化验/体能/分期等）。
+     年龄是几乎每条登记都写的一条；拿它当命中，整页会看起来「每条都命中」。 */
+  function trialHitRows(m) {
+    return m.evals.filter(function (e) { return e.state === 'satisfied' && e.cat !== 'age'; });
+  }
+  function trialStateOf(m) {
+    if (m.hardUnmet.length) return 'na';
+    if (trialHitRows(m).length) return 'hit';
+    return 'unmatched';
+  }
+  function trialStateRows(m, key) {
+    if (key === 'hit') return trialHitRows(m);
+    if (key === 'na') return m.hardUnmet.slice(0);
+    var unknown = m.evals.filter(function (e) { return e.state === 'undetermined'; });
+    return unknown.length ? unknown : m.evals.filter(function (e) { return e.state !== 'satisfied'; });
+  }
+  function trialBoardCard(m, key) {
+    var t = m.t, st = TRIAL_STATE[key];
+    var rows = trialStateRows(m, key);
+    return '<section class="card trial-board-card is-' + key + '">' +
+      '<div class="card-head"><div><div class="trial-tags">' + badge(st.label, st.cls) +
+        badge((t.phase || '—'), 'grey') + badge(TRIAL_SCOPE[t.scope] || '—', 'grey') +
+        (t.verifiedOn ? badge('核验 ' + t.verifiedOn, '') : badge('未核验', 'warn')) + '</div>' +
+        '<h2 class="h2">' + esc(t.id) + ' · ' + esc(t.title) + '</h2>' +
+        '<p class="muted small">来源 ' + esc(t.source || '登记渠道未记录') + ' · 快照 ' + esc(D.trialSnapshot || '未记录') +
+        ' · 登记状态，未核实</p></div></div>' +
+      '<div class="crit-list">' + rows.slice(0, 3).map(critLine).join('') + '</div>' +
+      (rows.length > 3 ? '<p class="muted small">另有 ' + (rows.length - 3) + ' 条同类条件，去「临床研究 → 匹配」逐条看。</p>' : '') +
+      '<p class="small-note">' + esc(st.note) + '</p>' +
+      '<div class="trial-actions"><button type="button" class="btn btn-quiet" data-act="trial-detail" data-id="' + esc(t.id) + '">看登记条件原文与中心</button></div>' +
+      '</section>';
+  }
+  function trialBoardLegend() {
+    return '<section class="card tri-legend"><div class="card-head"><h2 class="h2">三种状态怎么读</h2>' +
+      '<span class="muted small">只对照，不打分</span></div><dl class="tri-legend-list">' +
+      '<div class="tri-row"><dt>' + badge('命中', 'ok') + '</dt><dd>记录里有<b>疾病相关</b>字段能和这条登记条件对上（至少一条，且没有硬性条件与记录冲突）。年龄这类通用条件不算命中证据。</dd></div>' +
+      '<div class="tri-row"><dt>' + badge('无法自动匹配', 'q') + '</dt><dd>除年龄等通用条件外，本地没有可对照的结构化字段（如 ECOG 体能状态、uMRD）；逐条写缺什么，不替你下结论。</dd></div>' +
+      '<div class="tri-row"><dt>' + badge('不适用', 'no') + '</dt><dd>登记条件与记录里的值明确不一致，两边原文都照抄。「不适用」指这条条件，不是你。</dd></div>' +
+      '</dl></section>';
+  }
+  function pageTrials() {
+    var head = pageHead('临床试验', '临床试验 · 三态总览',
+      '每条登记只回答「记录里能不能对上」：命中 / 无法自动匹配 / 不适用。不产出评分或匹配度，不排名，不判断能不能入组。',
+      backHome() + '<button type="button" class="btn" data-act="go-trial">逐条条件对照 →</button>');
+    var trials = D.trials || [];
+    var source = '<section class="card trial-source"><div class="card-head"><h2 class="h2">登记来源与快照</h2>' +
+      '<span class="muted small">照抄登记原文，不判断</span></div><div class="fact-grid">' +
+      '<dl><dt>来源通道</dt><dd><b>' + esc(D.trialSourceLabel || '未记录') + '</b><span>登记库摘录</span></dd></dl>' +
+      '<dl><dt>快照日期</dt><dd><b>' + esc(D.trialSnapshot || '未记录') + '</b><span>快照会过期，以登记平台当日为准</span></dd></dl>' +
+      '<dl><dt>本地条目</dt><dd><b>' + trials.length + ' 条</b><span>本机快照（演示虚构，不是真实在招试验）</span></dd></dl>' +
+      '<dl><dt>在线接口</dt><dd><b>未接入</b><span>本仓无 /api/cll/trials；在线检索需手动运行 fetch-cll-trials-2026</span></dd></dl>' +
+      '</div><div class="row">' +
+      '<a class="btn" href="https://www.chinadrugtrials.org.cn/" target="_blank" rel="noopener">去登记平台自查 ↗</a>' +
+      '<a class="btn" href="https://trialsearch.who.int/" target="_blank" rel="noopener">ICTRP 检索 ↗</a></div></section>';
+    var dlg = '<dialog id="trial-dialog" class="modal"><div class="modal-head"><h2 class="h2" id="trial-dialog-title"></h2>' +
+      '<button type="button" class="btn" data-act="close-trial-dialog">关闭</button></div>' +
+      '<div class="modal-body" id="trial-dialog-body"></div></dialog>';
+
+    if (!trials.length) {
+      return head + source + '<section class="card"><div class="chart-empty">' +
+        '<p><b>本地还没有试验快照。</b>工作台不替你编条目：没有 /api/cll/trials 接口时，这一页只给空态与出口。</p>' +
+        '<p class="muted small">去登记平台自查：用病名 + 药名 + 城市检索，把登记号与原文抄回来，再到「临床研究」逐条对照。</p>' +
+        '<p><a class="btn btn-primary" href="https://www.chinadrugtrials.org.cn/" target="_blank" rel="noopener">去登记平台自查 ↗</a></p>' +
+        '</div></section>' + dlg;
+    }
+
+    var buckets = { hit: [], unmatched: [], na: [] };
+    trialMatches().forEach(function (m) { buckets[trialStateOf(m)].push(m); });
+    function group(key, title, sub) {
+      var list = buckets[key];
+      var empty = key === 'hit' ? '记录里还没有能和登记条件对上的字段。'
+        : key === 'na' ? '没有与记录明确不一致的硬性条件。' : '没有缺字段的条目。';
+      return '<section class="tri-group"><div class="section-title"><div><h2>' + esc(title) + '（' + list.length + '）</h2>' +
+        '<p>' + esc(sub) + '</p></div></div>' +
+        (list.length ? list.map(function (m) { return trialBoardCard(m, key); }).join('')
+          : '<div class="chart-empty"><p>' + empty + '</p></div>') + '</section>';
+    }
+    var body = group('hit', '命中', '按登记顺序列出；不排名、不算符合度') +
+      group('unmatched', '无法自动匹配', '本地缺结构化字段，逐条写原因') +
+      group('na', '不适用', '登记条件与记录值明确不一致，两边原文照抄');
+    var foot = '<footer class="trial-foot">来源：' + esc(D.trialSourceLabel || '未记录') + ' · 快照 ' + esc(D.trialSnapshot || '未记录') +
+      ' · 本页 ' + trials.length + ' 条（演示虚构，不是真实在招试验）。三态只说明记录与登记条件的对照结果，' +
+      '不构成入组判断，也不产出评分或匹配度。</footer>';
+    return head + source + trialBoardLegend() + body + foot + dlg;
+  }
+
   /* ---- 共病与在用药 comorb ---- */
   function pageComorb() {
     return pageHead('共病与在用药', 'CIRS 条目照抄',
@@ -1282,7 +1417,7 @@
   /* ================= 渲染与导航 ================= */
   var PAGES = {
     dash: pageDash, records: pageRecords, ww: pageWw, labs: pageLabs, onechart: pageOnechart,
-    gene: pageGene, med: pageMed, trial: pageTrial, comorb: pageComorb, nutr: pageNutr,
+    gene: pageGene, med: pageMed, trials: pageTrials, trial: pageTrial, comorb: pageComorb, nutr: pageNutr,
     mind: pageMind, prep: pagePrep, settings: pageSettings
   };
   function render() {
@@ -1294,9 +1429,21 @@
       if (v === state.route.view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
+    paintSubnavDock();
     main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
     if (state.route.view === 'onechart') applyOnechartLayout();
+  }
+
+  /* 二级导航停靠位（对齐小粉宝：宽屏二级留在页内，窄屏提到侧栏/顶部一行）。
+     直接复用本页 .subnav 的锚点与 aria-current，不另造第二份二级标签表。 */
+  function paintSubnavDock() {
+    var dock = $('#subnav-dock');
+    if (!dock) return;
+    var src = $('#view .subnav');
+    dock.innerHTML = src ? src.innerHTML : '';
+    if (src) dock.removeAttribute('aria-hidden');
+    else dock.setAttribute('aria-hidden', 'true');
   }
 
   /* ================= 事件委托 ================= */
@@ -1319,6 +1466,8 @@
       case 'go-ae': location.hash = '#med/ae'; break;
       case 'go-onechart': location.hash = '#onechart'; break;
       case 'go-trial-match': location.hash = '#trial/match'; break;
+      case 'go-trials': location.hash = '#trials'; break;
+      case 'go-trial': location.hash = '#trial'; break;
       case 'go-prep': location.hash = '#prep'; break;
       case 'go-gene': location.hash = '#gene'; break;
       case 'go-mrd': location.hash = '#labs'; window.scrollTo(0, document.body.scrollHeight); break;
@@ -1342,7 +1491,7 @@
       case 'range': {
         state.chart.range = el.getAttribute('data-range');
         $all('[data-act="range"]').forEach(function (c) { c.setAttribute('aria-pressed', c === el ? 'true' : 'false'); });
-        redrawChart(); break;
+        saveChartState(); redrawChart(); break;
       }
       case 'pin-pt': {
         if (!state.chart.pinOn) break;
@@ -1396,7 +1545,11 @@
         break;
       }
       case 'toggle-onechart-side': {
-        state.onechartSideOpen = !state.onechartSideOpen;
+        /* 手动选择优先于「窄容器自动收起」：展开 → 记住 open；收起 → 记住 closed */
+        var lay = $('.onechart-layout');
+        var nowCollapsed = lay ? lay.classList.contains('side-collapsed') : !state.onechartSideOpen;
+        state.onechartSideOpen = nowCollapsed;
+        state.onechartSideOverride = nowCollapsed ? 'open' : 'closed';
         applyOnechartLayout();
         break;
       }
@@ -1510,6 +1663,7 @@
       var ix = sel.indexOf(code);
       if (ix >= 0) sel.splice(ix, 1);
     }
+    saveChartState();
     redrawChart();
   });
 
@@ -1559,6 +1713,10 @@
       var label = { '3m': '近 3 月', '6m': '近 6 月', '12m': '近 12 月', all: '全部' }[state.chart.range] || '全部';
       sub.textContent = '已选 ' + state.chart.sel.length + ' 条 · ' + label;
     }
+    /* 收起态摘要条同屏更新（否则勾选后收起条还是旧文案） */
+    var sum = $('#onechart-collapsed .oc-sum');
+    if (sum) sum.textContent = chartSelSummary();
+    saveChartState();
   }
 
   /* ================= 启动 ================= */

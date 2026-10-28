@@ -94,16 +94,27 @@ h1{font-size:var(--fs-title); font-weight:700; letter-spacing:-.02em; line-heigh
   /* 两栏：导航 + 画布。原生会话由宿主外壳提供，不在业务页面内占列 */
   grid-template-columns:var(--sidebar-width) minmax(0,1fr);
 }
-.sidebar{padding:14px 12px; border-right:1px solid var(--border); background:var(--ground)}
-.sidebar ul{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px}
+.sidebar{padding:14px 12px; border-right:1px solid var(--border); background:var(--ground); display:flex; flex-direction:column; gap:10px}
+/* 一级导航按「今天 / 我的资料 / 治疗与随访 / 生活与准备 / 系统」分组；
+   层级对齐 A 家族（小粉宝）：图标 + 文字一行、当前项浅底 + 左侧 2px 色条、窄宽折成一行 chips */
+#navList{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px}
+.nav-group{display:flex; flex-direction:column; gap:2px}
+.nav-group-label{margin:0; padding:4px 12px 2px; font-size:10.5px; font-weight:600; letter-spacing:.08em; color:var(--faint)}
+.nav-sublist{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px}
 .sidebar a{
-  display:block; padding:8px 12px; border-radius:var(--radius-control); color:var(--ink-2);
-  text-decoration:none; font-size:14px; min-height:34px; line-height:18px;
+  display:flex; align-items:center; gap:9px; min-height:40px; padding:8px 12px;
+  border-radius:var(--radius-control); color:var(--ink-2);
+  text-decoration:none; font-size:13.5px; line-height:18px;
 }
-.sidebar a:hover{background:#f0f1f2}
+.sidebar a .nic{width:16px; height:16px; flex:0 0 16px; opacity:.72}
+.sidebar a:hover{background:#edf2ee}
+.sidebar a:hover .nic{opacity:.9}
 /* 导航退到后面：激活项只用中性灰 pill，不用品牌色和左侧色条 */
 .sidebar a[aria-current="page"]{color:var(--ink); font-weight:600; background:var(--active); box-shadow:inset 2px 0 0 var(--chart-hue)}
-.nav-note{margin-top:auto; padding-top:18px; font-size:12.5px; color:var(--muted)}
+.sidebar a[aria-current="page"] .nic{opacity:1; color:var(--chart-hue-deep)}
+/* 二级页签停靠位：宽屏隐藏，二级留在页内（与 A 家族同一套折叠规则） */
+#subnav-dock{display:none}
+.nav-note{margin-top:auto; padding-top:12px; font-size:12.5px; color:var(--muted)}
 .main-col{min-width:0; display:flex}
 #view{max-width:1180px; width:100%; margin:0 auto; padding:var(--pad) var(--pad) 48px; outline:none}
 
@@ -416,9 +427,20 @@ dialog.modal::backdrop{background:rgba(10,10,10,.38)}
 }
 @media (max-width:980px){
   .app{grid-template-columns:minmax(0,1fr)}
-  .sidebar{border-right:0; border-bottom:1px solid var(--line)}
-  .sidebar ul{display:flex; flex-wrap:wrap; gap:2px}
-  .sidebar a{border-left:0; border-radius:20px; padding:6px 10px}
+  .sidebar{border-right:0; border-bottom:1px solid var(--line); padding:10px 12px 8px; gap:8px}
+  /* 折叠规则（对齐 A 家族）：一级折成一行 chips，分组标题让位；
+     二级从页内提到导航下方一条，页内 .subnav 隐藏避免出现两份。 */
+  #navList{flex-direction:row; flex-wrap:wrap; gap:2px}
+  .nav-group,.nav-sublist{display:contents}
+  .nav-group-label{display:none}
+  .sidebar a{border-left:0; border-radius:20px; padding:6px 10px; min-height:34px; gap:6px; font-size:13px}
+  .sidebar a .nic{width:14px; height:14px; flex:0 0 14px}
+  .sidebar a[aria-current="page"]{box-shadow:none}
+  #subnav-dock{display:block; overflow-x:auto; border-top:1px solid var(--rule); padding-top:7px}
+  #subnav-dock:empty{display:none}
+  #subnav-dock a{display:inline-block; min-height:30px; padding:4px 10px; margin:0 5px 0 0; border:1px solid var(--line); border-radius:20px; background:var(--surface); font-size:11.5px; color:var(--ink-2); white-space:nowrap}
+  #subnav-dock a[aria-current="page"]{background:var(--soft-mint); border-color:var(--chart-hue); color:var(--chart-hue-deep); font-weight:600; box-shadow:none}
+  #view .subnav{display:none}
   .nav-note{display:none} /* 30 号：可让位的是口号，不是二级功能 */
   .session{border-left:0; border-top:1px solid var(--line)}
   #view{padding:18px 16px 36px}
@@ -583,3 +605,23 @@ dialog.modal::backdrop{background:rgba(10,10,10,.38)}
 .status-anchor{font-size:12px; color:var(--muted)}
 .status-now{margin:0; font-size:13px; line-height:1.6; color:var(--ink-2)}
 .status-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:2px}
+
+/* ---- 临床试验一级页：三态总览（命中 / 无法自动匹配 / 不适用；不给评分） ---- */
+.trial-source{margin-bottom:12px}
+.trial-source .row{gap:8px; flex-wrap:wrap; margin-top:10px}
+a.btn{text-decoration:none} /* 登记平台出口是 <a class="btn">，不要浏览器默认下划线 */
+.tri-legend{margin-bottom:12px}
+.tri-legend-list{display:flex; flex-direction:column; gap:8px; margin:0; padding:0}
+.tri-row{display:grid; grid-template-columns:118px minmax(0,1fr); gap:10px; align-items:start; padding:6px 0; border-top:1px solid var(--rule)}
+.tri-row:first-child{border-top:0}
+.tri-row dt{margin:0}
+.tri-row dd{margin:0; font-size:12.5px; line-height:1.65; color:var(--ink-2)}
+.tri-group{margin-bottom:6px}
+.trial-board-card{margin-bottom:10px; border-left:3px solid var(--control)}
+.trial-board-card.is-hit{border-left-color:var(--ok)}
+.trial-board-card.is-unmatched{border-left-color:var(--warn)}
+.trial-board-card.is-na{border-left-color:var(--danger)}
+.trial-board-card .crit-list{margin-top:6px}
+@media (max-width:980px){
+  .tri-row{grid-template-columns:minmax(0,1fr); gap:4px}
+}
