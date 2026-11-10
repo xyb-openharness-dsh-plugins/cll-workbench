@@ -1,6 +1,6 @@
 {
   "name": "@xyb-community/cll-workbench",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "CLL/SLL 患者与照护者的本机病程资料工作台：Watch & Wait 观察轨道与 ALC 倍增趋势、治疗触发词表、FISH/TP53/IGHV 基因预后档案与三档临床匹配、口服药日志与 MRD 里程碑、分系列指标卡",
   "private": true,
   "type": "module",
@@ -28,7 +28,7 @@
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:schema": "node scripts/check-schema.mjs",
     "check:wording": "node scripts/check-wording.mjs",
-    "check": "node scripts/check-syntax.mjs && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/check-schema.mjs && node scripts/check-wording.mjs && node scripts/check-derivative-leftovers.mjs . && node scripts/check-version.mjs && node scripts/smoke-activate.mjs && node --test test/*.test.mjs && node scripts/check-primer-links.mjs",
+    "check": "node scripts/check-syntax.mjs && node scripts/check-workbench-package.mjs . && node scripts/check-host-contract.mjs && node scripts/check-schema.mjs && node scripts/check-wording.mjs && node scripts/check-derivative-leftovers.mjs . && node scripts/check-version.mjs && node scripts/smoke-activate.mjs && node --test test/*.test.mjs && node scripts/check-primer-links.mjs && node scripts/check-agent-pane-contract.mjs .",
     "check:host": "node scripts/check-host-contract.mjs",
     "smoke:activate": "node scripts/smoke-activate.mjs",
     "verify:desktop": "node scripts/verify-desktop-load.mjs",
