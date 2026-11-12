@@ -58,6 +58,20 @@ function readBody(req, limit = MAX_UPLOAD_BYTES) {
  * @param {(req:object,res:object,path:string)=>boolean} opts.serveUi 静态文件出口（两条链路的 public/ 定位不同）
  * @param {string|null} [opts.failure] 数据源打不开的原因；非空时除 /health 外一律 503
  */
+/**
+ * 资料目录口径（与面板同一条规则；服务端再判一遍）：主目录本身/桌面/下载根/tmp 一律拒绝。
+ */
+export function checkDataDir(raw) {
+  const dir = String(raw || '').trim()
+  if (!dir) return { ok: false, reason: '目录为空' }
+  if (!/^(?:[A-Za-z]:[\\/]|[\\/])/.test(dir)) return { ok: false, reason: '请选择绝对路径' }
+  if (/^(\/Users\/[^/]+|\/home\/[^/]+|\/root|[A-Za-z]:\\Users\\[^\\]+)$/i.test(dir)) return { ok: false, reason: '主目录本身不作为资料目录，请建一个专用文件夹' }
+  if (/(Desktop|桌面)$/i.test(dir)) return { ok: false, reason: '桌面不作为资料目录' }
+  if (/(Downloads?|下载(夹)?)$/i.test(dir)) return { ok: false, reason: '下载根目录不作为资料目录' }
+  if (/^(\/tmp|\/private\/tmp|\/var\/folders\/|\/private\/var\/folders\/)/i.test(dir)) return { ok: false, reason: 'tmp 不作为资料目录（会被系统清理）' }
+  return { ok: true, dir }
+}
+
 export function createApiHandler({ source, version, build, serveUi, failure = null }) {
   return async function handle(req, res) {
     const url = new URL(req.url, 'http://127.0.0.1')
@@ -70,6 +84,37 @@ export function createApiHandler({ source, version, build, serveUi, failure = nu
         capabilities: ['bootstrap', 'profile', 'export', 'import', 'candidate', 'mineru-settings'],
         error: failure || undefined,
       })
+    }
+
+    /* ---------- 资料目录：读取 / 切换（真入口；口径服务端再判一遍） ---------- */
+    if (path === `${API_PREFIX}/root`) {
+      if (typeof source.dataRoot !== 'function') return sendJson(res, 503, { error: 'root_unavailable', message: '数据层未接线（需要 config.root）' })
+      try {
+        if (req.method === 'GET') return sendJson(res, 200, { dir: source.dataRoot() })
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' })
+        const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
+        const verdict = checkDataDir(body && body.dir)
+        if (!verdict.ok) return sendJson(res, 400, { error: 'invalid_dir', message: verdict.reason, dir: source.dataRoot() })
+        return sendJson(res, 200, { dir: await source.setDataRoot(body.dir) })
+      } catch (error) {
+        return sendJson(res, 400, { error: 'root_switch_failed', message: error.message, dir: source.dataRoot && source.dataRoot() })
+      }
+    }
+
+    /* ---------- 患者档案：列表 / 新建 / 删除 ---------- */
+    if (path === `${API_PREFIX}/subjects`) {
+      if (typeof source.createSubject !== 'function') return sendJson(res, 503, { error: 'subjects_unavailable', message: '数据层未接线' })
+      try {
+        if (req.method === 'GET') return sendJson(res, 200, { records: source.listSubjects() })
+        if (req.method === 'POST') {
+          const body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
+          return sendJson(res, 200, source.createSubject(body || {}))
+        }
+        if (req.method === 'DELETE') return sendJson(res, 200, source.deleteSubject(url.searchParams.get('profileKey') || ''))
+        return sendJson(res, 405, { error: 'method_not_allowed' })
+      } catch (error) {
+        return sendJson(res, 400, { error: 'profile_write_failed', message: error.message })
+      }
     }
 
     /* 数据源打不开：/health 已经报了原因，其它接口统一 503，不假装返回空数据。 */

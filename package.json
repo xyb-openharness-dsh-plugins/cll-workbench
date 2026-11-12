@@ -1,6 +1,6 @@
 {
   "name": "@xyb-community/cll-workbench",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "CLL/SLL 患者与照护者的本机病程资料工作台：Watch & Wait 观察轨道与 ALC 倍增趋势、治疗触发词表、FISH/TP53/IGHV 基因预后档案与三档临床匹配、口服药日志与 MRD 里程碑、分系列指标卡",
   "private": true,
   "type": "module",

@@ -63,6 +63,38 @@ export class Workbench {
 
   bootstrap() { return bootstrap(this.#db, { version, build }); }
   listSubjects() { return listSubjects(this.#db); }
+
+  get dataRoot() { return this.#workspace; }
+
+  /** 切换资料目录：复用静态 open() 的校验/建库/迁移，成功才替换；失败保留原库。 */
+  async setDataRoot(nextRoot) {
+    const dir = String(nextRoot || '').trim();
+    if (!dir || dir === this.#workspace) return this.#workspace;
+    const next = await Workbench.open(dir);
+    try { close(this.#db); } catch { /* 旧库关不掉也让切换继续 */ }
+    this.#db = next.#db;
+    this.#workspace = next.#workspace;
+    return this.#workspace;
+  }
+
+  /** 新建患者档案：is_demo=0；键用 local-<时间戳>，不与 demo 撞。 */
+  createSubject({ name, meta } = {}) {
+    const clean = String(name || '').trim();
+    if (!clean) throw new Error('请填写档案名（可以是昵称）');
+    if (clean.length > 40) throw new Error('档案名太长（≤40 字）');
+    const key = 'local-' + Date.now().toString(36);
+    this.#db.prepare('INSERT INTO subjects (profile_key, name, meta, is_demo, created_on) VALUES (?,?,?,0,date(\'now\'))')
+      .run(key, clean, String(meta || '').trim() || null);
+    return { profileKey: key, name: clean, records: this.listSubjects() };
+  }
+
+  /** demo 档案（is_demo=1）不可删。 */
+  deleteSubject(profileKey) {
+    const key = String(profileKey || '');
+    const info = this.#db.prepare('DELETE FROM subjects WHERE profile_key = ? AND is_demo = 0').run(key);
+    const changed = Number((info && info.changes) || 0);
+    return { deleted: changed > 0 ? key : null, reason: changed > 0 ? undefined : '不存在或演示档案不可删除', records: this.listSubjects() };
+  }
   /** @param {boolean} [includePrivate=false] 私密分节（阴道/性健康）默认不返回原文（口径 D） */
   getProfile(key, { includePrivate = false } = {}) { return getProfile(this.#db, key, { includePrivate }); }
 
